@@ -1012,7 +1012,7 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 	divider := true
 	containerComponents := []discordgo.MessageComponent{
 		discordgo.TextDisplay{
-			Content: fmt.Sprintf("# VNDB 遊戲搜尋\n搜尋筆數: **%d**", totalItems),
+			Content: fmt.Sprintf("# VNDB 遊戲搜尋\n搜尋筆數: **%d**\n⭐: VNDB分數 📊: 投票人數 ⏱️: 遊玩時數", totalItems),
 		},
 		discordgo.Separator{Divider: &divider},
 	}
@@ -1027,16 +1027,39 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 	// 產生遊戲列表組件
 	for idx, r := range pagedResults {
 		itemNum := start + idx + 1
-		itemContent := fmt.Sprintf("**%d. %s**\n%s", itemNum, r.Title, r.Alttitle)
+		var title string
+		if strings.TrimSpace(r.Alttitle) != "" {
+			title = r.Alttitle
+		} else {
+			title = r.Title
+		}
+
+		var ratingStr string
+		if r.Average != nil {
+			ratingStr = fmt.Sprintf("%.1f", *r.Average)
+		} else {
+			ratingStr = "無"
+		}
+		if r.Rating != nil {
+			ratingStr += fmt.Sprintf("/%.1f", *r.Rating)
+		} else {
+			ratingStr += "/無"
+		}
+
+		lengthHour := "無"
+		if r.LengthMinutes != nil {
+			lengthHour = fmt.Sprintf("%.1fh", float64(*r.LengthMinutes)/60.0)
+		}
+
+		itemContent := fmt.Sprintf("**%d. %s**\n⭐ **%s** 📊 **%d** ⏱️ **%s**", itemNum, title, ratingStr, r.VoteCount, lengthHour)
 
 		// // 處理圖片 URL
-		// thumbnailURL := ""
-		// if strings.TrimSpace(r.DMM) != "" {
-		// 	thumbnailURL = erogs.MakeDMMImageURL(r.DMM)
-		// }
-		// if strings.TrimSpace(thumbnailURL) == "" {
-		// 	thumbnailURL = placeholderImageURL
-		// }
+		var thumbnailURL string
+		if r.Image != nil && strings.TrimSpace(r.Image.Thumbnail) != "" {
+			thumbnailURL = r.Image.Thumbnail
+		} else {
+			thumbnailURL = placeholderImageURL
+		}
 
 		containerComponents = append(containerComponents, discordgo.Section{
 			Components: []discordgo.MessageComponent{
@@ -1046,7 +1069,7 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 			},
 			Accessory: &discordgo.Thumbnail{
 				Media: discordgo.UnfurledMediaItem{
-					URL: placeholderImageURL, // 目前沒接圖回來
+					URL: thumbnailURL,
 				},
 			},
 		})
