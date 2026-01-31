@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"kurohelper/cache"
@@ -9,16 +10,18 @@ import (
 	"sort"
 	"strings"
 
+	kurohelpercore "kurohelper-core"
+
+	"kurohelper-core/vndb"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
-	kurohelpercore "github.com/kuro-helper/kurohelper-core/v3"
-	"github.com/kuro-helper/kurohelper-core/v3/vndb"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	searchBrandItemsPerPage = 7
-	searchBrandCachePrefix  = "B@"
+	searchBrandCommandID    = "B1"
 )
 
 var (
@@ -53,24 +56,54 @@ func vndbSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	idStr := uuid.New().String()
+
+	// 將 keyword 轉成 base64 作為快取鍵
+	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
+
+	// 檢查快取是否存在
+	cacheValue, err := cache.VndbBrandStore.Get(cacheKey)
+	if err == nil {
+		// 存入CID與關鍵字的對應快取
+		cache.CIDStore.Set(idStr, cacheKey)
+
+		// 快取存在，直接使用，不需要延遲傳送
+		components, err := buildSearchBrandComponents(cacheValue, 1, idStr)
+		if err != nil {
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+			return
+		}
+		utils.InteractionRespondV2(s, i, components)
+		return
+	}
+
+	// 快取不存在，需要查詢資料
+	// 先發送延遲回應
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
 	logrus.WithField("interaction", i).Infof("vndb查詢公司品牌: %s", keyword)
 
 	res, err := vndb.GetProducerByFuzzy(keyword, "")
 	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
 		return
 	}
 
-	// 產生快取ID
-	cacheID := searchBrandCachePrefix + uuid.New().String()
-	cache.SearchBrandCache.Set(cacheID, res)
+	// 將查詢結果存入快取
+	cache.VndbBrandStore.Set(cacheKey, res)
 
-	components, err := buildSearchBrandComponents(res, 1, cacheID)
+	// 存入CID與關鍵字的對應快取
+	cache.CIDStore.Set(idStr, cacheKey)
+
+	components, err := buildSearchBrandComponents(res, 1, idStr)
 	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
 		return
 	}
-	utils.InteractionRespondV2(s, i, components)
+
+	utils.WebhookEditRespond(s, i, components)
 }
 
 // 產生查詢公司品牌(有CID版本)
@@ -88,13 +121,19 @@ func vndbSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
-	cacheValue, err := cache.SearchBrandCache.Get(pageCID.CacheId)
+	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
 
-	components, err := buildSearchBrandComponents(cacheValue, pageCID.Value, pageCID.CacheId)
+	cacheValue, err := cache.VndbBrandStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	components, err := buildSearchBrandComponents(cacheValue, pageCID.Value, pageCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
@@ -168,10 +207,10 @@ func buildSearchBrandComponents(res *vndb.ProducerSearchResponse, currentPage in
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(cacheID, brandMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandCommandID, cacheID, brandMenuItems)
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchBrandCommandID, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	} else {
@@ -199,17 +238,41 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	selectMenuCID := cid.ToSelectMenuCIDV2()
 
-	// 過期直接返回錯誤
-	if !cache.SearchBrandCache.Check(selectMenuCID.CacheId) {
+	// 檢查 CID 快取是否存在
+	if _, err := cache.CIDStore.Get(selectMenuCID.CacheID); err != nil {
 		utils.HandleErrorV2(kurohelpercore.ErrCacheLost, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
 
-	res, err := vndb.GetVNByFuzzy(selectMenuCID.Value)
-	logrus.WithField("guildID", i.GuildID).Infof("vndb搜尋遊戲: %s", selectMenuCID.Value)
+	utils.WebhookEditRespond(s, i, []discordgo.MessageComponent{
+		discordgo.Container{
+			Components: []discordgo.MessageComponent{
+				discordgo.TextDisplay{
+					Content: "# ⌛ 正在跳轉,請稍候...",
+				},
+			},
+		},
+	})
+
+	// 嘗試從快取取得單一遊戲資料
+	res, err := cache.VndbGameStore.Get(selectMenuCID.Value)
 	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
+		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+			logrus.WithField("guildID", i.GuildID).Infof("vndb搜尋遊戲: %s", selectMenuCID.Value)
+
+			res, err = vndb.GetVNByFuzzy(selectMenuCID.Value)
+			if err != nil {
+				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+				return
+			}
+
+			// 將查詢結果存入快取
+			cache.VndbGameStore.Set(selectMenuCID.Value, res)
+
+		} else {
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+			return
+		}
 	}
 	/* 處理回傳結構 */
 
@@ -398,7 +461,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		discordgo.Separator{Divider: &divider},
 		section,
 		discordgo.Separator{Divider: &divider},
-		utils.MakeBackToHomeComponent(selectMenuCID.CacheId),
+		utils.MakeBackToHomeComponent(searchBrandCommandID, selectMenuCID.CacheID),
 	}
 
 	components := []discordgo.MessageComponent{
@@ -423,13 +486,19 @@ func vndbSearchBrandWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	backToHomeCID := cid.ToBackToHomeCIDV2()
 
-	cacheValue, err := cache.SearchBrandCache.Get(backToHomeCID.CacheId)
+	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
 
-	components, err := buildSearchBrandComponents(cacheValue, 1, backToHomeCID.CacheId)
+	cacheValue, err := cache.VndbBrandStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	components, err := buildSearchBrandComponents(cacheValue, 1, backToHomeCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
