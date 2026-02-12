@@ -74,7 +74,7 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		case switchMode{'1', utils.SelectMenuBehavior}:
 			vndbSearchGameWithSelectMenuCIDV2(s, i, cid)
 		case switchMode{'2', utils.SelectMenuBehavior}:
-			erogsSearchGameWithSelectMenuCIDV2(s, i, cid)
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameErogsCommandID)
 		case switchMode{'1', utils.BackToHomeBehavior}:
 			vndbSearchGameWithBackToHomeCIDV2(s, i, cid)
 		case switchMode{'2', utils.BackToHomeBehavior}:
@@ -189,7 +189,7 @@ func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 }
 
 // 查詢單一遊戲資料(有CID版本，從選單選擇)
-func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, cidNamePrefix string) {
 	if cid.GetBehaviorID() != utils.SelectMenuBehavior {
 		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
 		return
@@ -483,7 +483,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchGameErogsCommandID, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(cidNamePrefix, selectMenuCID.CacheID))
 
 	components := []discordgo.MessageComponent{
 		discordgo.Container{

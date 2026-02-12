@@ -5,23 +5,30 @@ import (
 	"errors"
 	"fmt"
 	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
 	"sort"
+	"strconv"
 	"strings"
 
 	kurohelpercore "kurohelper-core"
+	"kurohelper-core/erogs"
 
 	"kurohelper-core/vndb"
+
+	kurohelperdb "kurohelper-db"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 const (
-	searchBrandItemsPerPage = 7
-	searchBrandCommandID    = "B1"
+	searchBrandItemsPerPage   = 7
+	searchBrandVNDBCommandID  = "B1"
+	searchBrandErogsCommandID = "B2"
 )
 
 var (
@@ -31,19 +38,38 @@ var (
 // 查詢公司品牌Handler(新版API)
 func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		vndbSearchBrandV2(s, i)
+		optDB, err := utils.GetOptions(i, "查詢資料庫選項")
+		if err != nil && errors.Is(err, kurohelperrerrors.ErrOptionTranslateFail) {
+			utils.HandleError(err, s, i)
+			return
+		}
+		switch optDB {
+		case "1":
+			vndbSearchBrandV2(s, i)
+		case "2":
+			erogsSearchBrandV2(s, i)
+		default:
+			// 預設走批評空間
+			erogsSearchBrandV2(s, i)
+		}
 	} else {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
 		})
-		switch cid.GetBehaviorID() {
-		case utils.PageBehavior:
+		// 選擇不同行為的進入點
+		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
+		case switchMode{'1', utils.PageBehavior}:
 			vndbSearchBrandWithCIDV2(s, i, cid)
-		case utils.SelectMenuBehavior:
-			// 查單一遊戲資料
+		case switchMode{'1', utils.SelectMenuBehavior}:
 			vndbSearchBrandWithSelectMenuCIDV2(s, i, cid)
-		case utils.BackToHomeBehavior:
+		case switchMode{'1', utils.BackToHomeBehavior}:
 			vndbSearchBrandWithBackToHomeCIDV2(s, i, cid)
+		case switchMode{'2', utils.PageBehavior}:
+			erogsSearchBrandWithCIDV2(s, i, cid)
+		case switchMode{'2', utils.SelectMenuBehavior}:
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandErogsCommandID)
+		case switchMode{'2', utils.BackToHomeBehavior}:
+			erogsSearchBrandWithBackToHomeCIDV2(s, i, cid)
 		}
 	}
 }
@@ -207,10 +233,10 @@ func buildSearchBrandComponents(res *vndb.ProducerSearchResponse, currentPage in
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandCommandID, cacheID, brandMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandVNDBCommandID, cacheID, brandMenuItems)
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchBrandCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchBrandVNDBCommandID, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	} else {
@@ -461,7 +487,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		discordgo.Separator{Divider: &divider},
 		section,
 		discordgo.Separator{Divider: &divider},
-		utils.MakeBackToHomeComponent(searchBrandCommandID, selectMenuCID.CacheID),
+		utils.MakeBackToHomeComponent(searchBrandVNDBCommandID, selectMenuCID.CacheID),
 	}
 
 	components := []discordgo.MessageComponent{
@@ -499,6 +525,266 @@ func vndbSearchBrandWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.Inter
 	}
 
 	components, err := buildSearchBrandComponents(cacheValue, 1, backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.InteractionRespondEditComplex(s, i, components)
+}
+
+// 批評空間
+
+func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	keyword, err := utils.GetOptions(i, "keyword")
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+		return
+	}
+
+	idStr := uuid.New().String()
+
+	// 將 keyword 轉成 base64 作為快取鍵
+	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
+
+	// 檢查快取是否存在
+	cacheValue, err := cache.ErogsBrandStore.Get(cacheKey)
+	if err == nil {
+		// 存入CID與關鍵字的對應快取
+		cache.CIDStore.Set(idStr, cacheKey)
+
+		// 快取存在，直接使用，不需要延遲傳送
+		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+		components, err := buildSearchBrandErogsComponents(cacheValue, 1, idStr, hasPlayedMap, inWishMap)
+		if err != nil {
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+			return
+		}
+		utils.InteractionRespondV2(s, i, components)
+		return
+	}
+
+	// 快取不存在，需要查詢資料
+	// 先發送延遲回應
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	logrus.WithField("interaction", i).Infof("erogs查詢公司品牌: %s", keyword)
+
+	res, err := erogs.SearchBrandByKeyword([]string{keyword})
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
+		return
+	}
+
+	// 將查詢結果存入快取
+	cache.ErogsBrandStore.Set(cacheKey, res)
+
+	// 存入CID與關鍵字的對應快取
+	cache.CIDStore.Set(idStr, cacheKey)
+
+	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+	components, err := buildSearchBrandErogsComponents(res, 1, idStr, hasPlayedMap, inWishMap)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
+		return
+	}
+
+	utils.WebhookEditRespond(s, i, components)
+}
+
+func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.PageBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	pageCID, err := cid.ToPageCIDV2()
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cacheValue, err := cache.ErogsBrandStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+	components, err := buildSearchBrandErogsComponents(cacheValue, pageCID.Value, pageCID.CacheID, hasPlayedMap, inWishMap)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.InteractionRespondEditComplex(s, i, components)
+}
+
+// getErogsUserPlayWishMaps 依互動取得使用者的已玩／願望清單對應的 GameErogsID set，供品牌頁顯示 ✅／❤️。
+func getErogsUserPlayWishMaps(i *discordgo.InteractionCreate) (hasPlayedMap, inWishMap map[int]struct{}) {
+	hasPlayedMap = make(map[int]struct{})
+	inWishMap = make(map[int]struct{})
+	userID := utils.GetUserID(i)
+	if strings.TrimSpace(userID) == "" {
+		return hasPlayedMap, inWishMap
+	}
+	if _, ok := store.UserStore[userID]; !ok {
+		return hasPlayedMap, inWishMap
+	}
+	userHasPlayed, err := kurohelperdb.SelectUserHasPlayed(userID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return hasPlayedMap, inWishMap
+	}
+	for _, item := range userHasPlayed {
+		hasPlayedMap[item.GameErogsID] = struct{}{}
+	}
+	userInWish, err := kurohelperdb.SelectUserInWish(userID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return hasPlayedMap, inWishMap
+	}
+	for _, item := range userInWish {
+		inWishMap[item.GameErogsID] = struct{}{}
+	}
+	return hasPlayedMap, inWishMap
+}
+
+func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID string, hasPlayedMap, inWishMap map[int]struct{}) ([]discordgo.MessageComponent, error) {
+	if hasPlayedMap == nil {
+		hasPlayedMap = make(map[int]struct{})
+	}
+	if inWishMap == nil {
+		inWishMap = make(map[int]struct{})
+	}
+	totalItems := len(res.GameList)
+	totalPages := (totalItems + searchBrandItemsPerPage - 1) / searchBrandItemsPerPage
+
+	// 品牌標題（解散時加註）、官網／Twitter 連結
+	brandTitle := res.BrandName
+	if res.Lost {
+		brandTitle += " (解散)"
+	}
+	linkLine := ""
+	if strings.TrimSpace(res.URL) != "" {
+		linkLine += fmt.Sprintf("[官網](%s) ", res.URL)
+	}
+	if strings.TrimSpace(res.Twitter) != "" {
+		linkLine += fmt.Sprintf("[Twitter](https://x.com/%s) ", res.Twitter)
+	}
+	linkSection := ""
+	if linkLine != "" {
+		linkSection = linkLine + "\n"
+	}
+	headerContent := fmt.Sprintf("# %s\n%s遊戲筆數: **%d**\n✅: 已玩 ❤️: 願望清單\n⭐: 批評空間分數(中位數/樣本差) 📊:投票人數 📅: 發售日期", brandTitle, linkSection, totalItems)
+
+	divider := true
+	containerComponents := []discordgo.MessageComponent{
+		discordgo.TextDisplay{
+			Content: headerContent,
+		},
+		discordgo.Separator{Divider: &divider},
+	}
+
+	// 計算當前頁的範圍
+	start := (currentPage - 1) * searchBrandItemsPerPage
+	end := min(start+searchBrandItemsPerPage, totalItems)
+	pagedResults := res.GameList[start:end]
+
+	brandMenuItems := []utils.SelectMenuItem{}
+
+	// 產生遊戲組件
+	for idx, item := range pagedResults {
+		itemNum := start + idx + 1
+		var prefix string
+		if _, exists := hasPlayedMap[item.ID]; exists {
+			prefix += "✅"
+		}
+		if _, exists := inWishMap[item.ID]; exists {
+			prefix += "❤️"
+		}
+		itemContent := prefix + fmt.Sprintf("**%d. %s**\n⭐**%d/%d** / 📊**%d**/📅**%s** (%s)", itemNum, item.GameName, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
+
+		thumbnailURL := ""
+		if strings.TrimSpace(item.DMM) != "" {
+			thumbnailURL = erogs.MakeDMMImageURL(item.DMM)
+		}
+		if strings.TrimSpace(thumbnailURL) == "" {
+			thumbnailURL = placeholderImageURL
+		}
+
+		containerComponents = append(containerComponents, discordgo.Section{
+			Components: []discordgo.MessageComponent{
+				discordgo.TextDisplay{
+					Content: itemContent,
+				},
+			},
+			Accessory: &discordgo.Thumbnail{
+				Media: discordgo.UnfurledMediaItem{
+					URL: thumbnailURL,
+				},
+			},
+		})
+
+		brandMenuItems = append(brandMenuItems, utils.SelectMenuItem{
+			Title: item.GameName + " (" + item.Category + ")",
+			ID:    "e" + strconv.Itoa(item.ID),
+		})
+	}
+
+	// 產生選單組件
+	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandErogsCommandID, cacheID, brandMenuItems)
+
+	// 產生翻頁組件
+	pageComponents, err := utils.MakeChangePageComponent(searchBrandErogsCommandID, currentPage, totalPages, cacheID)
+	if err != nil {
+		return nil, err
+	} else {
+		containerComponents = append(containerComponents,
+			discordgo.Separator{Divider: &divider},
+			selectMenuComponents,
+			pageComponents,
+		)
+	}
+
+	// 組成完整組件回傳
+	return []discordgo.MessageComponent{
+		discordgo.Container{
+			AccentColor: &searchBrandColor,
+			Components:  containerComponents,
+		},
+	}, nil
+}
+
+func erogsSearchBrandWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+	})
+
+	backToHomeCID := cid.ToBackToHomeCIDV2()
+	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cacheValue, err := cache.ErogsBrandStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+	components, err := buildSearchBrandErogsComponents(cacheValue, 1, backToHomeCID.CacheID, hasPlayedMap, inWishMap)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return

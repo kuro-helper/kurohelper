@@ -28,6 +28,8 @@ var (
 	ErogsMusicListStore = NewCacheStoreV2[[]erogs.MusicList](2 * time.Hour)
 	// 使用批評空間ID作為鍵
 	ErogsMusicStore = NewCacheStoreV2[*erogs.Music](2 * time.Hour)
+	// 使用關鍵字Base64作為鍵
+	ErogsBrandStore = NewCacheStoreV2[*erogs.Brand](2 * time.Hour)
 )
 
 // VNDB快取
