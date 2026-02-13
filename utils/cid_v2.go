@@ -34,6 +34,12 @@ type (
 		Value      string
 	}
 
+	DetailBtnCIDV2 struct {
+		BehaviorID BehaviorID
+		CacheID    string
+		Value      string
+	}
+
 	// 切換來源CID
 	SwitchSourceCIDV2 struct {
 		BehaviorID BehaviorID
@@ -56,6 +62,8 @@ const (
 	SelectMenuBehavior BehaviorID = "S"
 	// BackToHomeBehavior 不會有Value
 	BackToHomeBehavior BehaviorID = "H"
+
+	DetailBtnBehavior BehaviorID = "D"
 
 	SwitchSourceBehavior BehaviorID = "W"
 )
@@ -113,6 +121,14 @@ func (c CIDV2) ToSelectMenuCIDV2() *SelectMenuCIDV2 {
 	}
 }
 
+func (c CIDV2) ToDetailBtnCIDV2() *DetailBtnCIDV2 {
+	return &DetailBtnCIDV2{
+		CacheID:    c.cacheID,
+		BehaviorID: c.behaviorID,
+		Value:      c.value,
+	}
+}
+
 func (c CIDV2) ToSwitchSourceCIDV2() *SwitchSourceCIDV2 {
 	return &SwitchSourceCIDV2{
 		CacheID:    c.cacheID,
@@ -152,13 +168,17 @@ func MakePageCIDV2(commandID string, index int, cacheID string, disable bool) st
 // 產生select menu的CID時不需要先預留Value，Value會在選單選擇時才設定(Discord會自動設定)
 //
 // CID標示符是S
-func MakeSelectMenuCIDV2(commandID string, cacheID string) string {
+func MakeSelectMenuCIDV2(commandID, cacheID string) string {
 	return fmt.Sprintf("%s:%s:S:", commandID, cacheID)
+}
+
+func MakeDetailBtnCIDV2(commandID, cacheID, searchID string) string {
+	return fmt.Sprintf("%s:%s:D:%s", commandID, cacheID, searchID)
 }
 
 // 產生回到主頁的CID
 //
 // CID標示符是H
-func MakeBackToHomeCIDV2(commandID string, cacheID string) string {
+func MakeBackToHomeCIDV2(commandID, cacheID string) string {
 	return fmt.Sprintf("%s:%s:H:", commandID, cacheID)
 }
