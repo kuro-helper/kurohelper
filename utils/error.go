@@ -66,8 +66,7 @@ func HandleErrorV2(
 	case errors.Is(err, kurohelperdb.ErrUniqueViolation):
 		errMsg = "資料已存在，此次操作無效"
 	case errors.Is(err, gorm.ErrRecordNotFound):
-		errMsg = "資料已存在，此次操作無效"
-		WebhookEditRespond(s, i, MakeErrorComponentV2("找不到資料或使用者尚未建檔"))
+		errMsg = "找不到資料或使用者尚未建檔"
 	case errors.Is(err, kurohelpercore.ErrRateLimit):
 		errMsg = "速率限制，請過約1分鐘後再試"
 	case errors.Is(err, kurohelpercore.ErrSearchNoContent):
@@ -78,6 +77,10 @@ func HandleErrorV2(
 		errMsg = "日期格式錯誤，完成日期不得超過今日加一天"
 	case errors.Is(err, kurohelpercore.ErrBangumiCharacterListSearchNotSupported):
 		errMsg = "目前不支援對Bangumi使用角色列表搜尋"
+	case errors.Is(err, kurohelpercore.ErrCacheLost):
+		errMsg = "快取過期，請重新查詢"
+	default:
+		errMsg = "該功能目前異常，請稍後再嘗試"
 	}
 
 	responder(s, i, MakeErrorComponentV2(errMsg))
