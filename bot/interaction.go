@@ -31,7 +31,7 @@ func onInteractionApplicationCommand(s *discordgo.Session, i *discordgo.Interact
 	case "查詢公司品牌v2":
 		go handlers.SearchBrandV2(s, i, nil)
 	case "查詢創作者":
-		go handlers.SearchCreator(s, i, nil)
+		go handlers.SearchCreatorV2(s, i, nil)
 	case "查詢音樂":
 		go handlers.SearchMusicV2(s, i, nil)
 	case "查詢角色":
@@ -60,9 +60,6 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 	if len(cidStringSlice) > 1 {
 		cid := utils.NewCID(cidStringSlice)
 		switch cid.GetCommandName() {
-		// case CustomIDTypeAddWish:
-		case "查詢創作者":
-			go handlers.SearchCreator(s, i, &cid)
 		case "查詢角色":
 			go handlers.SearchCharacter(s, i, &cid)
 		case "加已玩":
@@ -90,7 +87,7 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 
 		commandID := cid.GetCommandID()
 		// CID不合法(commandID的部分)
-		if len(commandID) != 2 {
+		if len(commandID) < 2 || len(commandID) > 3 {
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return
 		}
@@ -101,6 +98,8 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 			go handlers.SearchBrandV2(s, i, cid)
 		case 'M':
 			go handlers.SearchMusicV2(s, i, cid)
+		case 'C':
+			go handlers.SearchCreatorV2(s, i, cid)
 		default:
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return

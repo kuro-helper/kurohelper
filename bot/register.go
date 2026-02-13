@@ -8,19 +8,7 @@ import (
 // 註冊命令
 func RegisterCommand(s *discordgo.Session) {
 	var globalCmds []*discordgo.ApplicationCommand
-	// guildCmds = append(guildCmds, managementCommands()...)
 	globalCmds = append(globalCmds, galgameCommands()...)
-
-	// guild commands
-	// main mangement group ID
-	// guildID := os.Getenv("SELF_GROUP_ID")
-	// for _, cmd := range guildCmds {
-	// 	_, err := s.ApplicationCommandCreate(s.State.User.ID, guildID, cmd)
-	// 	if err != nil {
-	// 		logrus.Errorf("register guild slash command failed: %s", err)
-	// 	}
-	// }
-	// global commands
 	for _, cmd := range globalCmds {
 		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd)
 		if err != nil {
@@ -29,16 +17,6 @@ func RegisterCommand(s *discordgo.Session) {
 	}
 
 }
-
-// 群組專用管理指令，要使用群組內部整合管理複寫權限，預設是全部可見(私有)
-// func managementCommands() []*discordgo.ApplicationCommand {
-// 	return []*discordgo.ApplicationCommand{
-// 		{
-// 			Name:        "清除快取",
-// 			Description: "清除搜尋資料快取(管理員專用)",
-// 		},
-// 	}
-// }
 
 // 主要專用指令(全域)
 func galgameCommands() []*discordgo.ApplicationCommand {
@@ -56,18 +34,6 @@ func galgameCommands() []*discordgo.ApplicationCommand {
 					Name:        "keyword",
 					Description: "關鍵字",
 					Required:    true,
-				},
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "列表搜尋",
-					Description: "是否啟用列表搜尋",
-					Required:    false,
-					Choices: []*discordgo.ApplicationCommandOptionChoice{
-						{
-							Name:  "啟用",
-							Value: "1",
-						},
-					},
 				},
 			},
 		},

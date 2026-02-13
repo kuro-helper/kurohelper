@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	kurohelpercore "kurohelper-core"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,146 +14,312 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
-	kurohelperrerrors "kurohelper/errors"
 	"kurohelper/utils"
 
 	"kurohelper-core/erogs"
 )
 
-// 查詢創作者Handler
-func SearchCreator(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
-	// 長時間查詢
-	if cid == nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		})
-	}
+const (
+	searchCreatorListItemsPerPage    = 10
+	searchCreatorItemsPerPage        = 7
+	searchCreatorListCommandID       = "C2"
+	searchCreatorDetailCommandID     = "CD2"
+	searchCreatorGameSelectCommandID = "CG2" // 從創作者詳情選遊戲跳轉，回到上一頁用 CD2
+)
 
-	if i.Type == discordgo.InteractionApplicationCommand {
-		opt, err := utils.GetOptions(i, "列表搜尋")
-		if err != nil && errors.Is(err, kurohelperrerrors.ErrOptionTranslateFail) {
-			utils.HandleError(err, s, i)
-			return
-		}
-		if opt == "" {
-			erogsSearchCreator(s, i, cid)
-		} else {
-			erogsSearchCreatorList(s, i, cid)
-		}
+var searchCreatorColor = 0xF8F8DF
+
+func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid == nil {
+		erogsSearchCreatorListV2(s, i)
 	} else {
-		if !cid.GetCommandNameIsList() {
-			erogsSearchCreator(s, i, cid)
-		} else {
-			erogsSearchCreatorList(s, i, cid)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		})
+		cmdID, behaviorID := cid.GetCommandID(), cid.GetBehaviorID()
+		switch {
+		case cmdID == searchCreatorGameSelectCommandID && behaviorID == utils.SelectMenuBehavior:
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchCreatorDetailCommandID)
+		case cmdID == searchCreatorDetailCommandID && behaviorID == utils.BackToHomeBehavior:
+			erogsSearchCreatorDetailBackToHomeV2(s, i, cid)
+		case behaviorID == utils.PageBehavior:
+			if cmdID == searchCreatorDetailCommandID {
+				erogsSearchCreatorDetailWithCIDV2(s, i, cid)
+			} else {
+				erogsSearchCreatorListWithCIDV2(s, i, cid)
+			}
+		case behaviorID == utils.DetailBtnBehavior:
+			erogsSearchCreatorWithSelectMenuCIDV2(s, i, cid)
+		case behaviorID == utils.BackToHomeBehavior:
+			erogsSearchCreatorWithBackToHomeCIDV2(s, i, cid)
+		default:
+			utils.HandleErrorV2(errors.New("error behavior id"), s, i, utils.InteractionRespondEditComplex)
 		}
 	}
 }
 
-// erogs查詢創作者處理
-func erogsSearchCreator(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
-	var res *erogs.Creator
-	var messageComponent []discordgo.MessageComponent
-	var hasMore bool
-	var count int
-	var countInner int
-	var pageIndex int
+func erogsSearchCreatorListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	keyword, err := utils.GetOptions(i, "keyword")
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
+		return
+	}
 
-	if cid == nil {
-		keyword, err := utils.GetOptions(i, "keyword")
+	idStr := uuid.New().String()
+	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
+
+	cacheValue, err := cache.ErogsCreatorListStore.Get(cacheKey)
+	if err == nil {
+		cache.CIDStore.Set(idStr, cacheKey)
+		components, err := buildSearchCreatorListComponents(cacheValue, 1, idStr)
 		if err != nil {
-			utils.HandleError(err, s, i)
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
 			return
 		}
-		idSearch, _ := regexp.MatchString(`^e\d+$`, keyword)
-		if idSearch {
-			num, _ := strconv.Atoi(keyword[1:])
-			res, err = erogs.SearchCreatorByID(num)
-		} else {
-			res, err = erogs.SearchCreatorByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
-		}
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-		logrus.WithField("guildID", i.GuildID).Infof("erogs查詢創作者: %s", keyword)
+		utils.InteractionRespondV2(s, i, components)
+		return
+	}
 
-		idStr := uuid.New().String()
-		cache.SearchCache.Set(idStr, *res)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
 
-		// 根據遊戲評價排序
-		sort.Slice(res.Games, func(i, j int) bool {
-			return res.Games[i].Median > res.Games[j].Median // 大到小排序
-		})
-		// 計算筆數
-		for _, inner := range res.Games {
-			countInner += len(inner.Shokushu)
-		}
-		count = len(res.Games)
+	logrus.WithField("guildID", i.GuildID).Infof("erogs查詢創作者列表: %s", keyword)
 
-		hasMore = pagination(&(res.Games), 0, false)
+	res, err := erogs.SearchCreatorListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
+		return
+	}
 
-		if hasMore {
-			cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", idStr, 1, cidCommandName)}
-		}
-	} else {
-		// 處理CID
-		pageCID := utils.PageCID{
-			NewCID: *cid,
-		}
-		cacheValue, err := cache.SearchCache.Get(pageCID.GetCacheID())
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-		resValue := cacheValue.(erogs.Creator)
-		res = &resValue
+	cache.ErogsCreatorListStore.Set(cacheKey, res)
+	cache.CIDStore.Set(idStr, cacheKey)
 
-		// 根據遊戲評價排序
-		sort.Slice(res.Games, func(i, j int) bool {
-			return res.Games[i].Median > res.Games[j].Median // 大到小排序
-		})
-		// 計算筆數
-		for _, inner := range res.Games {
-			countInner += len(inner.Shokushu)
-		}
-		count = len(res.Games)
+	components, err := buildSearchCreatorListComponents(res, 1, idStr)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
+		return
+	}
+	utils.WebhookEditRespond(s, i, components)
+}
 
-		// 資料分頁
-		pageIndex, err = pageCID.GetPageIndex()
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-		hasMore = pagination(&(res.Games), pageIndex, true)
-		cidCommandName := utils.MakeCIDCommandName(cid.GetCommandName(), false, "")
-		if hasMore {
-			if pageIndex == 0 {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), 1, cidCommandName)}
-			} else {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
-				messageComponent = append(messageComponent, utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), pageIndex+1, cidCommandName))
+// erogsSearchCreatorListWithCIDV2 創作者列表翻頁
+func erogsSearchCreatorListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.PageBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	pageCID, err := cid.ToPageCIDV2()
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cacheValue, err := cache.ErogsCreatorListStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	components, err := buildSearchCreatorListComponents(cacheValue, pageCID.Value, pageCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.WebhookEditRespond(s, i, components)
+}
+
+// erogsSearchCreatorDetailWithCIDV2 創作者詳情歷代作品翻頁（僅詳情，與列表完全無關）
+func erogsSearchCreatorDetailWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.PageBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	pageCID, err := cid.ToPageCIDV2()
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	creatorKey, err := cache.CIDStore.Get(pageCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	res, err := cache.ErogsCreatorStore.Get(creatorKey)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	components, err := buildSearchCreatorDetailComponents(res, pageCID.Value, pageCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.WebhookEditRespond(s, i, components)
+}
+
+// erogsSearchCreatorWithBackToHomeCIDV2 從創作者詳情回到列表主頁
+func erogsSearchCreatorWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	backToHomeCID := cid.ToBackToHomeCIDV2()
+
+	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	cacheValue, err := cache.ErogsCreatorListStore.Get(cidCacheValue)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+
+	components, err := buildSearchCreatorListComponents(cacheValue, 1, backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.InteractionRespondEditComplex(s, i, components)
+}
+
+// erogsSearchCreatorDetailBackToHomeV2 從遊戲詳情回到創作者詳情（上一頁）
+func erogsSearchCreatorDetailBackToHomeV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
+		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	backToHomeCID := cid.ToBackToHomeCIDV2()
+	creatorKey, err := cache.CIDStore.Get(backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	res, err := cache.ErogsCreatorStore.Get(creatorKey)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	components, err := buildSearchCreatorDetailComponents(res, 1, backToHomeCID.CacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.InteractionRespondEditComplex(s, i, components)
+}
+
+// erogsSearchCreatorWithSelectMenuCIDV2 以 CID 的 value 作為查詢 id 顯示創作者詳情（選單或按鈕「查看詳情」進入，統一取 cid value）
+func erogsSearchCreatorWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+	detailCID := cid.ToDetailBtnCIDV2()
+	creatorKey := detailCID.Value
+
+	utils.WebhookEditRespond(s, i, []discordgo.MessageComponent{
+		discordgo.Container{
+			Components: []discordgo.MessageComponent{
+				discordgo.TextDisplay{
+					Content: "# ⌛ 正在跳轉，請稍候...",
+				},
+			},
+		},
+	})
+
+	res, err := cache.ErogsCreatorStore.Get(creatorKey)
+	if err != nil {
+		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+			logrus.WithField("guildID", i.GuildID).Infof("erogs查詢創作者: %s", creatorKey)
+			cleanStr := strings.TrimPrefix(creatorKey, "E")
+			cleanStr = strings.TrimPrefix(cleanStr, "e")
+			creatorID, err := strconv.Atoi(cleanStr)
+			if err != nil {
+				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+				return
 			}
+			res, err = erogs.SearchCreatorByID(creatorID)
+			if err != nil {
+				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+				return
+			}
+			cache.ErogsCreatorStore.Set(creatorKey, res)
 		} else {
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+			return
 		}
 	}
 
-	actionsRow := utils.MakeActionsRow(messageComponent)
+	// 選擇後與原列表脫鉤，僅用 PageCID：cacheID 只存 creatorKey，後續翻頁完全獨立
+	detailCacheID := uuid.New().String()
+	cache.CIDStore.Set(detailCacheID, creatorKey)
+
+	components, err := buildSearchCreatorDetailComponents(res, 1, detailCacheID)
+	if err != nil {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
+	}
+	utils.InteractionRespondEditComplex(s, i, components)
+}
+
+// buildSearchCreatorDetailComponents 產生創作者詳情（歷代作品分頁）的 Components
+func buildSearchCreatorDetailComponents(res *erogs.Creator, currentPage int, pageCacheID string) ([]discordgo.MessageComponent, error) {
+	if res == nil {
+		return nil, errors.New("handlers: creator res is nil")
+	}
+	games := res.Games
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].Median > games[j].Median
+	})
+
+	totalItems := len(games)
+	totalPages := (totalItems + searchCreatorItemsPerPage - 1) / searchCreatorItemsPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	start := (currentPage - 1) * searchCreatorItemsPerPage
+	end := min(start+searchCreatorItemsPerPage, totalItems)
+	pagedGames := games[start:end]
 
 	link := ""
 	if res.TwitterUsername != "" {
 		link += fmt.Sprintf("[Twitter](https://x.com/%s) ", res.TwitterUsername)
 	}
-	// if res.Blog != "" {
-	// 	link += fmt.Sprintf("[Blog](%s) ", res.Blog)
-	// }
 	if res.Pixiv != nil {
 		link += fmt.Sprintf("[Pixiv](https://www.pixiv.net/users/%d) ", *res.Pixiv)
 	}
 
-	gameData := make([]string, 0, len(res.Games))
-	for i, g := range res.Games {
+	divider := true
+	countInner := 0
+	for _, inner := range res.Games {
+		countInner += len(inner.Shokushu)
+	}
+	headerContent := fmt.Sprintf("# %s\n歷代作品 **%d(%d)** 筆（遊戲評價排序）\n⭐: 批評空間分數 📊: 投票人數", res.Name, totalItems, countInner)
+	if strings.TrimSpace(link) != "" {
+		headerContent += "\n" + link
+	}
+
+	containerComponents := []discordgo.MessageComponent{
+		discordgo.TextDisplay{
+			Content: headerContent,
+		},
+		discordgo.Separator{Divider: &divider},
+	}
+
+	gameMenuItems := make([]utils.SelectMenuItem, 0, len(pagedGames))
+	for idx, g := range pagedGames {
 		shokushu := make([]string, 0, len(g.Shokushu))
 		for _, s := range g.Shokushu {
 			if s.Shubetu != 7 {
@@ -162,124 +328,113 @@ func erogsSearchCreator(s *discordgo.Session, i *discordgo.InteractionCreate, ci
 				shokushu = append(shokushu, fmt.Sprintf("*%s*", s.ShubetuDetailName))
 			}
 		}
+		shokushuStr := strings.Join(shokushu, ", ")
+		itemNum := start + idx + 1
+		itemContent := fmt.Sprintf("**%d. %s** (%s)\n⭐ **%d** / 📊 **%d** / %s", itemNum, g.Gamename, shokushuStr, g.Median, g.CountAll, g.SellDay)
 
-		if cid == nil {
-			gameData = append(gameData, fmt.Sprintf("%d. **%s**  (%s) / %d分 / %s", i+1, g.Gamename, strings.Join(shokushu, ", "), g.Median, g.SellDay))
-		} else {
-			gameData = append(gameData, fmt.Sprintf("%d. **%s**  (%s) / %d分 / %s", pageIndex*10+i+1, g.Gamename, strings.Join(shokushu, ", "), g.Median, g.SellDay))
+		thumbnailURL := ""
+		if strings.TrimSpace(g.DMM) != "" {
+			thumbnailURL = erogs.MakeDMMImageURL(g.DMM)
 		}
-	}
+		if strings.TrimSpace(thumbnailURL) == "" {
+			thumbnailURL = placeholderImageURL
+		}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("%s(%d/%d  筆)", res.Name, count, countInner),
-		Color:       0xF8F8DF,
-		Description: link,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "歷代作品(遊戲評價排序)",
-				Value:  strings.Join(gameData, "\n"),
-				Inline: false,
+		containerComponents = append(containerComponents, discordgo.Section{
+			Components: []discordgo.MessageComponent{
+				discordgo.TextDisplay{
+					Content: itemContent,
+				},
 			},
+			Accessory: &discordgo.Thumbnail{
+				Media: discordgo.UnfurledMediaItem{
+					URL: thumbnailURL,
+				},
+			},
+		})
+		gameMenuItems = append(gameMenuItems, utils.SelectMenuItem{
+			Title: g.Gamename + " (" + g.SellDay + ")",
+			ID:    "e" + strconv.Itoa(g.ID),
+		})
+	}
+
+	// 與 search_game_v2 相同：選單選擇遊戲可跳轉遊戲詳情，並可回到上一頁（創作者詳情）
+	selectMenuComponents := utils.MakeSelectMenuComponent(searchCreatorGameSelectCommandID, pageCacheID, gameMenuItems)
+	containerComponents = append(containerComponents, discordgo.Separator{Divider: &divider}, selectMenuComponents)
+
+	if totalItems > searchCreatorItemsPerPage {
+		pageComponents, err := utils.MakeChangePageComponent(searchCreatorDetailCommandID, currentPage, totalPages, pageCacheID)
+		if err != nil {
+			return nil, err
+		}
+		containerComponents = append(containerComponents, discordgo.Separator{Divider: &divider}, pageComponents)
+	}
+
+	return []discordgo.MessageComponent{
+		discordgo.Container{
+			AccentColor: &searchCreatorColor,
+			Components:  containerComponents,
 		},
-	}
-
-	if cid == nil {
-		utils.InteractionEmbedRespond(s, i, embed, actionsRow, true)
-	} else {
-		utils.EditEmbedRespond(s, i, embed, actionsRow)
-	}
-
+	}, nil
 }
 
-// erogs查詢創作者列表搜尋處理
-func erogsSearchCreatorList(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
-	var res *[]erogs.CreatorList
-	var messageComponent []discordgo.MessageComponent
-	var hasMore bool
-	var count int
-	var pageIndex int
-	if cid == nil {
-		keyword, err := utils.GetOptions(i, "keyword")
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-
-		res, err := erogs.SearchCreatorListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-
-		idStr := uuid.New().String()
-		cache.SearchCache.Set(idStr, &res)
-
-		// 計算筆數
-		count = len(res)
-
-		hasMore = pagination(&res, 0, false)
-
-		if hasMore {
-			cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, true, "")
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", idStr, 1, cidCommandName)}
-		}
-	} else {
-		// 處理CID
-		pageCID := utils.PageCID{
-			NewCID: *cid,
-		}
-		cacheValue, err := cache.SearchCache.Get(pageCID.GetCacheID())
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-		resValue := cacheValue.(*[]erogs.CreatorList)
-		res = resValue
-
-		// 計算筆數
-		count = len(*res)
-
-		// 資料分頁
-		pageIndex, err = pageCID.GetPageIndex()
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-		hasMore = pagination(res, pageIndex, true)
-		cidCommandName := utils.MakeCIDCommandName(cid.GetCommandName(), true, "")
-		if hasMore {
-			if pageIndex == 0 {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), 1, cidCommandName)}
-			} else {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
-				messageComponent = append(messageComponent, utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), pageIndex+1, cidCommandName))
-			}
-		} else {
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
-		}
+// buildSearchCreatorListComponents 產生創作者列表的 Components
+func buildSearchCreatorListComponents(res []erogs.CreatorList, currentPage int, cacheID string) ([]discordgo.MessageComponent, error) {
+	if res == nil {
+		return nil, errors.New("handlers: creator list res is nil")
 	}
-	actionsRow := utils.MakeActionsRow(messageComponent)
-
-	listData := make([]string, 0, len(*res))
-	for _, r := range *res {
-		listData = append(listData, fmt.Sprintf("e%-5s　%s", strconv.Itoa(r.ID), r.Name))
+	totalItems := len(res)
+	totalPages := (totalItems + searchCreatorListItemsPerPage - 1) / searchCreatorListItemsPerPage
+	if totalPages == 0 {
+		totalPages = 1
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("創作者列表搜尋 (%d筆)", count),
-		Color: 0xF8F8DF,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "ID/名稱",
-				Value:  strings.Join(listData, "\n"),
-				Inline: false,
-			},
+
+	divider := true
+	containerComponents := []discordgo.MessageComponent{
+		discordgo.TextDisplay{
+			Content: fmt.Sprintf("# 創作者列表搜尋\n搜尋筆數: **%d**", totalItems),
 		},
+		discordgo.Separator{Divider: &divider},
 	}
 
-	if cid == nil {
-		utils.InteractionEmbedRespond(s, i, embed, actionsRow, true)
-	} else {
-		utils.EditEmbedRespond(s, i, embed, actionsRow)
+	start := (currentPage - 1) * searchCreatorListItemsPerPage
+	end := min(start+searchCreatorListItemsPerPage, totalItems)
+	pagedResults := res[start:end]
+
+	creatorMenuItems := make([]utils.SelectMenuItem, 0, len(pagedResults))
+	for idx, r := range pagedResults {
+		itemNum := start + idx + 1
+		containerComponents = append(containerComponents, discordgo.Section{
+			Components: []discordgo.MessageComponent{
+				discordgo.TextDisplay{
+					Content: fmt.Sprintf("**%d. e%-5s　%s**", itemNum, strconv.Itoa(r.ID), r.Name),
+				},
+			},
+			Accessory: discordgo.Button{
+				Label:    "查看詳情",
+				Style:    discordgo.PrimaryButton,
+				CustomID: utils.MakeDetailBtnCIDV2(searchCreatorListCommandID, cacheID, "e"+strconv.Itoa(r.ID)),
+			},
+		})
+		creatorMenuItems = append(creatorMenuItems, utils.SelectMenuItem{
+			Title: r.Name,
+			ID:    "e" + strconv.Itoa(r.ID),
+		})
+	}
+	pageComponents, err := utils.MakeChangePageComponent(searchCreatorListCommandID, currentPage, totalPages, cacheID)
+	if err != nil {
+		return nil, err
 	}
 
+	containerComponents = append(containerComponents,
+		discordgo.Separator{Divider: &divider},
+		pageComponents,
+	)
+
+	return []discordgo.MessageComponent{
+		discordgo.Container{
+			AccentColor: &searchCreatorColor,
+			Components:  containerComponents,
+		},
+	}, nil
 }
