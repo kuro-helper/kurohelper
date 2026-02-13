@@ -33,6 +33,10 @@ func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
 			logrus.Printf("ErogsMusicListStore 快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
 			egsDC, egsC = ErogsMusicStore.Clean()
 			logrus.Printf("ErogsMusicStore     快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			egsDC, egsC = ErogsCreatorListStore.Clean()
+			logrus.Printf("ErogsCreatorListStore 快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			egsDC, egsC = ErogsCreatorStore.Clean()
+			logrus.Printf("ErogsCreatorStore   快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
 		case <-stopChan:
 			logrus.Println("CleanCacheJob 正在關閉...")
 			return

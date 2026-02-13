@@ -30,6 +30,10 @@ var (
 	ErogsMusicStore = NewCacheStoreV2[*erogs.Music](2 * time.Hour)
 	// 使用關鍵字Base64作為鍵
 	ErogsBrandStore = NewCacheStoreV2[*erogs.Brand](2 * time.Hour)
+	// 創作者列表：使用關鍵字 Base64 作為鍵
+	ErogsCreatorListStore = NewCacheStoreV2[[]erogs.CreatorList](2 * time.Hour)
+	// 創作者詳情：使用 "e" + 創作者 ID 作為鍵
+	ErogsCreatorStore = NewCacheStoreV2[*erogs.Creator](2 * time.Hour)
 )
 
 // VNDB快取
