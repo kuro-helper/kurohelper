@@ -233,7 +233,7 @@ func buildSearchBrandComponents(res *vndb.ProducerSearchResponse, currentPage in
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandVNDBCommandID, cacheID, brandMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandVNDBCommandID, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
 	pageComponents, err := utils.MakeChangePageComponent(searchBrandVNDBCommandID, currentPage, totalPages, cacheID)
@@ -737,7 +737,7 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchBrandErogsCommandID, cacheID, brandMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandErogsCommandID, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
 	pageComponents, err := utils.MakeChangePageComponent(searchBrandErogsCommandID, currentPage, totalPages, cacheID)

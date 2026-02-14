@@ -16,7 +16,7 @@ var (
 	ErrMakeChangePageComponentIndexZero = errors.New("utils: make change page component page index parameters can not be zero")
 )
 
-func MakeSelectMenuComponent(commandID string, cacheID string, gameData []SelectMenuItem) *discordgo.ActionsRow {
+func MakeSelectMenuComponent(gameData []SelectMenuItem, commandID, cacheID, placeholder string) *discordgo.ActionsRow {
 	menuOptions := []discordgo.SelectMenuOption{}
 
 	for _, gd := range gameData {
@@ -30,7 +30,7 @@ func MakeSelectMenuComponent(commandID string, cacheID string, gameData []Select
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
 				CustomID:    MakeSelectMenuCIDV2(commandID, cacheID),
-				Placeholder: "選擇遊戲查看詳細",
+				Placeholder: placeholder,
 				Options:     menuOptions,
 			},
 		},

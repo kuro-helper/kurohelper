@@ -584,7 +584,7 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchGameErogsCommandID, cacheID, gameMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameErogsCommandID, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
 	pageComponents, err := utils.MakeChangePageComponent(searchGameErogsCommandID, currentPage, totalPages, cacheID)
@@ -1081,7 +1081,7 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchGameVndbCommandID, cacheID, gameMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameVndbCommandID, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
 	pageComponents, err := utils.MakeChangePageComponent(searchGameVndbCommandID, currentPage, totalPages, cacheID)

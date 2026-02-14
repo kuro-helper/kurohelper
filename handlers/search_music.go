@@ -378,7 +378,7 @@ func buildSearchMusicComponents(res []erogs.MusicList, currentPage int, cacheID 
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchMusicCommandID, cacheID, gameMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchMusicCommandID, cacheID, "選擇音樂查看詳細")
 
 	// 產生翻頁組件
 	pageComponents, err := utils.MakeChangePageComponent(searchMusicCommandID, currentPage, totalPages, cacheID)

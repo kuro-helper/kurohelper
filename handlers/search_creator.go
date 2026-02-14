@@ -359,7 +359,7 @@ func buildSearchCreatorDetailComponents(res *erogs.Creator, currentPage int, pag
 	}
 
 	// 與 search_game_v2 相同：選單選擇遊戲可跳轉遊戲詳情，並可回到上一頁（創作者詳情）
-	selectMenuComponents := utils.MakeSelectMenuComponent(searchCreatorGameSelectCommandID, pageCacheID, gameMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchCreatorGameSelectCommandID, pageCacheID, "選擇遊戲查看詳細")
 	containerComponents = append(containerComponents, discordgo.Separator{Divider: &divider}, selectMenuComponents)
 
 	if totalItems > searchCreatorItemsPerPage {
