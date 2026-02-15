@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"kurohelper-core/bangumi"
 	"kurohelper-core/erogs"
 	"kurohelper-core/vndb"
 
@@ -44,6 +45,15 @@ var (
 	VndbGameStore = NewCacheStoreV2[*vndb.BasicResponse[vndb.GetVnUseIDResponse]](2 * time.Hour)
 	// 使用關鍵字Base64作為鍵
 	VndbBrandStore = NewCacheStoreV2[*vndb.ProducerSearchResponse](2 * time.Hour)
+	// 角色列表：使用關鍵字 Base64 作為鍵
+	VndbCharacterListStore = NewCacheStoreV2[[]vndb.CharacterSearchResponse](2 * time.Hour)
+	// 角色詳情：使用 VNDB 角色 ID（如 c123）作為鍵
+	VndbCharacterStore = NewCacheStoreV2[*vndb.CharacterSearchResponse](2 * time.Hour)
+)
+
+// Bangumi快取(因為沒有任何CID事件，所以直接拿搜尋關鍵字做 base64 對應實際資料)
+var (
+	BangumiCharacterStore = NewCacheStoreV2[*bangumi.Character](2 * time.Hour)
 )
 
 // 月幕快取
