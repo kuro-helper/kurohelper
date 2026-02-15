@@ -79,6 +79,8 @@ func HandleErrorV2(
 		errMsg = "目前不支援對Bangumi使用角色列表搜尋"
 	case errors.Is(err, kurohelpercore.ErrCacheLost):
 		errMsg = "快取過期，請重新查詢"
+	case errors.Is(err, kurohelpererrors.ErrCIDBehaviorMismatch):
+		errMsg = "無效的操作，請重新查詢"
 	default:
 		errMsg = "該功能目前異常，請稍後再嘗試"
 	}
