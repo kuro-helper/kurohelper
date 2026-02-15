@@ -10,8 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// SearchList 處理「關鍵字搜尋列表」的完整流程：檢查快取、無快取則查詢並延遲回應。
-// 適用於 VNDB 角色、Erogs 品牌／音樂／創作者／遊戲等列表搜尋。
+// 處理「關鍵字搜尋列表」的完整流程：檢查快取、無快取則查詢並延遲回應。
 //
 // 參數：
 //   - s: 用於發送回應的 Discord session
