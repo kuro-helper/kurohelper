@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
+	"kurohelper/handlers/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
 	"os"
@@ -76,9 +77,9 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		case switchMode{'2', utils.SelectMenuBehavior}:
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameErogsCommandID)
 		case switchMode{'1', utils.BackToHomeBehavior}:
-			vndbSearchGameWithBackToHomeCIDV2(s, i, cid)
+			navigator.BackToHome(s, i, cid, cache.VndbGameListStore, buildVndbSearchGameComponents)
 		case switchMode{'2', utils.BackToHomeBehavior}:
-			erogsSearchGameWithBackToHomeCIDV2(s, i, cid)
+			navigator.BackToHome(s, i, cid, cache.ErogsGameListStore, buildSearchGameComponents)
 		}
 	}
 }
@@ -492,35 +493,6 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		},
 	}
 
-	utils.InteractionRespondEditComplex(s, i, components)
-}
-
-// 返回遊戲列表主頁(有CID版本)
-func erogsSearchGameWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsGameListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchGameComponents(cacheValue, 1, backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
 	utils.InteractionRespondEditComplex(s, i, components)
 }
 
@@ -972,35 +944,6 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 		},
 	}
 
-	utils.InteractionRespondEditComplex(s, i, components)
-}
-
-// 返回 VNDB 遊戲列表主頁(有CID版本)
-func vndbSearchGameWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.VndbGameListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildVndbSearchGameComponents(cacheValue, 1, backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
 	utils.InteractionRespondEditComplex(s, i, components)
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
+	common "kurohelper/handlers/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
 	"sort"
@@ -63,13 +64,16 @@ func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 		case switchMode{'1', utils.SelectMenuBehavior}:
 			vndbSearchBrandWithSelectMenuCIDV2(s, i, cid)
 		case switchMode{'1', utils.BackToHomeBehavior}:
-			vndbSearchBrandWithBackToHomeCIDV2(s, i, cid)
+			common.BackToHome(s, i, cid, cache.VndbBrandStore, buildSearchBrandComponents)
 		case switchMode{'2', utils.PageBehavior}:
 			erogsSearchBrandWithCIDV2(s, i, cid)
 		case switchMode{'2', utils.SelectMenuBehavior}:
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandErogsCommandID)
 		case switchMode{'2', utils.BackToHomeBehavior}:
-			erogsSearchBrandWithBackToHomeCIDV2(s, i, cid)
+			common.BackToHome(s, i, cid, cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+				hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+				return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
+			})
 		}
 	}
 }
@@ -500,38 +504,6 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	utils.InteractionRespondEditComplex(s, i, components)
 }
 
-func vndbSearchBrandWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-	})
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.VndbBrandStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchBrandComponents(cacheValue, 1, backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
-}
-
 // 批評空間
 
 func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -758,36 +730,4 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 			Components:  containerComponents,
 		},
 	}, nil
-}
-
-func erogsSearchBrandWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-	})
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsBrandStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-	components, err := buildSearchBrandErogsComponents(cacheValue, 1, backToHomeCID.CacheID, hasPlayedMap, inWishMap)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
 }

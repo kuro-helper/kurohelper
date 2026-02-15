@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
+	"kurohelper/handlers/navigator"
 	"kurohelper/utils"
 
 	"kurohelper-core/erogs"
@@ -37,7 +38,7 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 		case utils.SelectMenuBehavior:
 			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid)
 		case utils.BackToHomeBehavior:
-			erogsSearchMusicWithBackToHomeCIDV2(s, i, cid)
+			navigator.BackToHome(s, i, cid, cache.ErogsMusicListStore, buildSearchMusicComponents)
 		}
 	}
 }
@@ -275,35 +276,6 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 			Components:  containerComponents,
 		},
 	})
-}
-
-// 返回音樂列表主頁(有CID版本)
-func erogsSearchMusicWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsMusicListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchMusicComponents(cacheValue, 1, backToHomeCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
 }
 
 // 產生查詢音樂列表的Components
