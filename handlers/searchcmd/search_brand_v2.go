@@ -1,4 +1,4 @@
-package handlers
+package searchcmd
 
 import (
 	"errors"
@@ -138,7 +138,7 @@ func buildSearchBrandComponents(res *vndb.ProducerSearchResponse, currentPage in
 				},
 				Accessory: &discordgo.Thumbnail{
 					Media: discordgo.UnfurledMediaItem{
-						URL: placeholderImageURL,
+						URL: utils.PlaceholderImageURL,
 					},
 				},
 			})
@@ -281,7 +281,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	// character block
 
-	characterMap := make(map[string]CharacterData) // map[characterID]CharacterData
+	characterMap := make(map[string]utils.CharacterData) // map[characterID]CharacterData
 	for _, va := range res.Results[0].Va {
 		characterName := va.Character.Original
 		if characterName == "" {
@@ -289,7 +289,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		}
 		for _, vn := range va.Character.Vns {
 			if vn.ID == res.Results[0].ID {
-				characterMap[va.Character.ID] = CharacterData{
+				characterMap[va.Character.ID] = utils.CharacterData{
 					Name: characterName,
 					Role: vn.Role,
 				}
@@ -299,7 +299,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	}
 
 	// 將 map 轉為 slice 並排序
-	characterList := make([]CharacterData, 0, len(characterMap))
+	characterList := make([]utils.CharacterData, 0, len(characterMap))
 	for _, character := range characterMap {
 		characterList = append(characterList, character)
 	}
@@ -402,7 +402,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	// 如果有圖片，使用真實圖片；沒有圖片則使用占位符
 	thumbnailURL := imageURL
 	if strings.TrimSpace(thumbnailURL) == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	section.Accessory = &discordgo.Thumbnail{
@@ -546,7 +546,7 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 			thumbnailURL = erogs.MakeDMMImageURL(item.DMM)
 		}
 		if strings.TrimSpace(thumbnailURL) == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{

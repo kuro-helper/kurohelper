@@ -1,4 +1,4 @@
-package handlers
+package searchcmd
 
 import (
 	"encoding/base64"
@@ -133,7 +133,7 @@ func buildSearchCharacterComponents(res []vndb.CharacterSearchResponse, currentP
 
 		thumbnailURL := strings.TrimSpace(r.Image.URL)
 		if thumbnailURL == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{
@@ -331,7 +331,7 @@ func vndbSearchCharacterWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.I
 		}
 	}
 	if thumbnailURL == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	section.Accessory = &discordgo.Thumbnail{
@@ -468,7 +468,7 @@ func bangumiSearchCharacter(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 	}
 	if thumbnailURL == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 	section.Accessory = &discordgo.Thumbnail{
 		Media: discordgo.UnfurledMediaItem{URL: thumbnailURL},

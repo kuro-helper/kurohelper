@@ -1,4 +1,4 @@
-package handlers
+package searchcmd
 
 import (
 	"errors"
@@ -401,7 +401,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	// 如果有圖片，使用真實圖片；沒有圖片則使用占位符
 	thumbnailURL := imageURL
 	if strings.TrimSpace(thumbnailURL) == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	section.Accessory = &discordgo.Thumbnail{
@@ -468,7 +468,7 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 			thumbnailURL = erogs.MakeDMMImageURL(r.DMM)
 		}
 		if strings.TrimSpace(thumbnailURL) == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{
@@ -639,7 +639,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	// character block
-	characterMap := make(map[string]CharacterData)
+	characterMap := make(map[string]utils.CharacterData)
 	for _, va := range res.Results[0].Va {
 		characterName := va.Character.Original
 		if characterName == "" {
@@ -647,7 +647,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 		}
 		for _, vn := range va.Character.Vns {
 			if vn.ID == res.Results[0].ID {
-				characterMap[va.Character.ID] = CharacterData{
+				characterMap[va.Character.ID] = utils.CharacterData{
 					Name: characterName,
 					Role: vn.Role,
 				}
@@ -657,7 +657,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	// 將 map 轉為 slice 並排序
-	characterList := make([]CharacterData, 0, len(characterMap))
+	characterList := make([]utils.CharacterData, 0, len(characterMap))
 	for _, character := range characterMap {
 		characterList = append(characterList, character)
 	}
@@ -768,7 +768,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	if strings.TrimSpace(thumbnailURL) == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	section.Accessory = &discordgo.Thumbnail{
@@ -852,7 +852,7 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 		if r.Image != nil && strings.TrimSpace(r.Image.Thumbnail) != "" {
 			thumbnailURL = r.Image.Thumbnail
 		} else {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{

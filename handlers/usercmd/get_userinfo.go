@@ -1,4 +1,4 @@
-package handlers
+package usercmd
 
 import (
 	"fmt"
@@ -65,12 +65,12 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 		}
 
 		var hasMore bool
-		hasPlayed, tmpMore := paginationR(userInfo.HasPlayed, pageIndex, true)
+		hasPlayed, tmpMore := utils.PaginationR(userInfo.HasPlayed, pageIndex, true)
 		if tmpMore {
 			hasMore = true
 		}
 
-		inWish, tmpMore := paginationR(userInfo.InWish, pageIndex, true)
+		inWish, tmpMore := utils.PaginationR(userInfo.InWish, pageIndex, true)
 		if tmpMore {
 			hasMore = true
 		}

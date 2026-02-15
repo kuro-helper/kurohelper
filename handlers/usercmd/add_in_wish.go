@@ -1,13 +1,11 @@
-package handlers
+package usercmd
 
 import (
-	"errors"
 	"fmt"
 	kurohelpercore "kurohelper-core"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	kurohelperdb "kurohelper-db"
 
@@ -17,15 +15,14 @@ import (
 	"gorm.io/gorm"
 
 	"kurohelper/cache"
-	kurohelpererrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
 
 	"kurohelper-core/erogs"
 )
 
-// 加已玩Handler
-func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+// 加收藏Handler
+func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -34,18 +31,8 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 	})
 
 	if cid != nil {
-		addHasPlayedCID := utils.AddHasPlayedCID{
-			NewCID: *cid,
-		}
-
-		completeDate, err := addHasPlayedCID.GetCompleteDate()
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
-
 		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(addHasPlayedCID.GetCacheID())
+		cacheValue, err := cache.UserInfoCache.Get(cid.GetCacheID())
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -73,7 +60,7 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 				}
 
 				// 4. 建立資料
-				if err := kurohelperdb.CreateUserHasPlayedTx(tx, userID, res.ID, completeDate); err != nil {
+				if err := kurohelperdb.CreateUserInWishTx(tx, userID, res.ID); err != nil {
 					return err
 				}
 
@@ -91,13 +78,13 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 
 			embed := &discordgo.MessageEmbed{
 				Title: "加入成功！",
-				Color: 0x7BA23F,
+				Color: 0x90B44B,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		} else { // 找不到使用者，此狀況應該會是Discord官方問題或是程式碼邏輯問題
 			embed := &discordgo.MessageEmbed{
 				Title: "找不到使用者！",
-				Color: 0x7BA23F,
+				Color: 0x90B44B,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		}
@@ -110,26 +97,6 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			return
 		}
 
-		completeDate, err := utils.GetOptions(i, "complete_date")
-		if err != nil && !errors.Is(err, kurohelpererrors.ErrOptionNotFound) {
-			utils.HandleError(err, s, i)
-			return
-		}
-
-		var t time.Time
-		if completeDate != "" {
-			t, err = utils.ParseYYYYMMDD(completeDate)
-			if err != nil {
-				utils.HandleError(err, s, i)
-				return
-			}
-
-			if t.After(time.Now().AddDate(0, 0, 1)) {
-				utils.HandleError(err, s, i)
-				return
-			}
-		}
-
 		idSearch, _ := regexp.MatchString(`^e\d+$`, keyword)
 		if idSearch {
 			num, _ := strconv.Atoi(keyword[1:])
@@ -137,19 +104,15 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		} else {
 			res, err = erogs.SearchGameByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
 		}
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
 
 		idStr := uuid.New().String()
 		cache.UserInfoCache.Set(idStr, *res)
 
 		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDAddHasPlayedComponent("✅", idStr, t, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{utils.MakeCIDCommonComponent("✅", idStr, cidCommandName)}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
-		image := generateImage(i, res.BannerUrl)
+		image := utils.GenerateImage(i, res.BannerUrl)
 
 		embed := &discordgo.MessageEmbed{
 			Author: &discordgo.MessageEmbedAuthor{
@@ -157,7 +120,7 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			},
 			Title: fmt.Sprintf("**%s(%s)**", res.Gamename, res.SellDay),
 			URL:   res.Shoukai,
-			Color: 0x7BA23F,
+			Color: 0x90B44B,
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "發行機種",
@@ -166,7 +129,7 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 				},
 				{
 					Name:   "確認",
-					Value:  "你確定要加入已玩嗎?",
+					Value:  "你確定要加入收藏嗎?",
 					Inline: false,
 				},
 			},

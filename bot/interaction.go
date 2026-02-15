@@ -7,6 +7,10 @@ import (
 
 	kurohelpererrors "kurohelper/errors"
 	"kurohelper/handlers"
+	"kurohelper/handlers/randomcmd"
+	"kurohelper/handlers/searchcmd"
+	"kurohelper/handlers/usercmd"
+	"kurohelper/handlers/vndbcmd"
 	"kurohelper/utils"
 )
 
@@ -25,31 +29,31 @@ func onInteractionApplicationCommand(s *discordgo.Session, i *discordgo.Interact
 	case "幫助":
 		go handlers.Helper(s, i)
 	case "vndb統計資料":
-		go handlers.VndbStats(s, i)
-	case "查詢遊戲v2":
-		go handlers.SearchGameV2(s, i, nil)
-	case "查詢公司品牌v2":
-		go handlers.SearchBrandV2(s, i, nil)
+		go vndbcmd.VndbStats(s, i)
+	case "查詢遊戲":
+		go searchcmd.SearchGameV2(s, i, nil)
+	case "查詢公司品牌":
+		go searchcmd.SearchBrandV2(s, i, nil)
 	case "查詢創作者":
-		go handlers.SearchCreatorV2(s, i, nil)
+		go searchcmd.SearchCreatorV2(s, i, nil)
 	case "查詢音樂":
-		go handlers.SearchMusicV2(s, i, nil)
+		go searchcmd.SearchMusicV2(s, i, nil)
 	case "查詢角色":
-		go handlers.SearchCharacterV2(s, i, nil)
+		go searchcmd.SearchCharacterV2(s, i, nil)
 	case "加已玩":
-		go handlers.AddHasPlayed(s, i, nil)
+		go usercmd.AddHasPlayed(s, i, nil)
 	case "加收藏":
-		go handlers.AddInWish(s, i, nil)
+		go usercmd.AddInWish(s, i, nil)
 	case "隨機角色":
-		go handlers.RandomCharacter(s, i)
+		go randomcmd.RandomCharacter(s, i)
 	case "隨機遊戲":
-		go handlers.RandomGame(s, i)
+		go randomcmd.RandomGame(s, i)
 	case "個人資料":
-		go handlers.GetUserinfo(s, i, nil)
+		go usercmd.GetUserinfo(s, i, nil)
 	case "刪除已玩":
-		go handlers.RemoveHasPlayed(s, i, nil)
+		go usercmd.RemoveHasPlayed(s, i, nil)
 	case "刪除收藏":
-		go handlers.RemoveInWish(s, i, nil)
+		go usercmd.RemoveInWish(s, i, nil)
 	}
 }
 
@@ -61,15 +65,15 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 		cid := utils.NewCID(cidStringSlice)
 		switch cid.GetCommandName() {
 		case "加已玩":
-			go handlers.AddHasPlayed(s, i, &cid)
+			go usercmd.AddHasPlayed(s, i, &cid)
 		case "加收藏":
-			go handlers.AddInWish(s, i, &cid)
+			go usercmd.AddInWish(s, i, &cid)
 		case "個人資料":
-			go handlers.GetUserinfo(s, i, &cid)
+			go usercmd.GetUserinfo(s, i, &cid)
 		case "刪除已玩":
-			go handlers.RemoveHasPlayed(s, i, &cid)
+			go usercmd.RemoveHasPlayed(s, i, &cid)
 		case "刪除收藏":
-			go handlers.RemoveInWish(s, i, &cid)
+			go usercmd.RemoveInWish(s, i, &cid)
 		}
 	} else { // 新版CID(V2)
 		cid, err := utils.ParseCIDV2(i.MessageComponentData().CustomID)
@@ -91,15 +95,15 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 		}
 		switch commandID[0] {
 		case 'G':
-			go handlers.SearchGameV2(s, i, cid)
+			go searchcmd.SearchGameV2(s, i, cid)
 		case 'B':
-			go handlers.SearchBrandV2(s, i, cid)
+			go searchcmd.SearchBrandV2(s, i, cid)
 		case 'M':
-			go handlers.SearchMusicV2(s, i, cid)
+			go searchcmd.SearchMusicV2(s, i, cid)
 		case 'C':
-			go handlers.SearchCreatorV2(s, i, cid)
+			go searchcmd.SearchCreatorV2(s, i, cid)
 		case 'H':
-			go handlers.SearchCharacterV2(s, i, cid)
+			go searchcmd.SearchCharacterV2(s, i, cid)
 		default:
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return

@@ -1,4 +1,4 @@
-package handlers
+package searchcmd
 
 import (
 	"errors"
@@ -130,7 +130,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 	}
 
 	if thumbnailURL == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	// 構建 Components
@@ -252,7 +252,7 @@ func buildSearchMusicComponents(res []erogs.MusicList, currentPage int, cacheID 
 			}
 		}
 		if strings.TrimSpace(thumbnailURL) == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{

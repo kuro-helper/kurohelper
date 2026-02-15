@@ -1,4 +1,4 @@
-package handlers
+package searchcmd
 
 import (
 	"errors"
@@ -202,7 +202,7 @@ func buildSearchCreatorDetailComponents(res *erogs.Creator, currentPage int, pag
 			thumbnailURL = erogs.MakeDMMImageURL(g.DMM)
 		}
 		if strings.TrimSpace(thumbnailURL) == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{

@@ -1,4 +1,4 @@
-package handlers
+package randomcmd
 
 import (
 	"errors"
@@ -112,7 +112,7 @@ func vndbRandomCharacter(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	}
 
 	res.Description = vndb.ConvertBBCodeToMarkdown(res.Description)
-	image := generateImage(i, res.Image.URL)
+	image := utils.GenerateImage(i, res.Image.URL)
 	embed := &discordgo.MessageEmbed{
 		Title:       nameData,
 		Description: res.Description, // 敘述放在Description欄位以避免超過字數限制
