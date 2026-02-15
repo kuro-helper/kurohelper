@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	kurohelpercore "kurohelper-core"
@@ -32,7 +31,13 @@ var searchCreatorColor = 0xF8F8DF
 
 func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		erogsSearchCreatorListV2(s, i)
+		navigator.SearchList(s, i, cache.ErogsCreatorListStore, "erogs查詢創作者列表", func() ([]erogs.CreatorList, error) {
+			keyword, err := utils.GetOptions(i, "keyword")
+			if err != nil {
+				return nil, err
+			}
+			return erogs.SearchCreatorListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+		}, buildSearchCreatorListComponents)
 	} else {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
@@ -57,51 +62,6 @@ func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 			utils.HandleErrorV2(errors.New("error behavior id"), s, i, utils.InteractionRespondEditComplex)
 		}
 	}
-}
-
-func erogsSearchCreatorListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	cacheValue, err := cache.ErogsCreatorListStore.Get(cacheKey)
-	if err == nil {
-		cache.CIDStore.Set(idStr, cacheKey)
-		components, err := buildSearchCreatorListComponents(cacheValue, 1, idStr)
-		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
-		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	logrus.WithField("guildID", i.GuildID).Infof("erogs查詢創作者列表: %s", keyword)
-
-	res, err := erogs.SearchCreatorListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	cache.ErogsCreatorListStore.Set(cacheKey, res)
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildSearchCreatorListComponents(res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-	utils.WebhookEditRespond(s, i, components)
 }
 
 // erogsSearchCreatorListWithCIDV2 創作者列表翻頁

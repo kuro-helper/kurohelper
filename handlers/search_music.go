@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
@@ -27,7 +25,13 @@ var searchMusicColor = 0xF8F8DF
 // 查詢音樂指令入口
 func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		erogsSearchMusicListV2(s, i)
+		navigator.SearchList(s, i, cache.ErogsMusicListStore, "erogs查詢音樂列表", func() ([]erogs.MusicList, error) {
+			keyword, err := utils.GetOptions(i, "keyword")
+			if err != nil {
+				return nil, err
+			}
+			return erogs.SearchMusicListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+		}, buildSearchMusicComponents)
 	} else {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
@@ -41,64 +45,6 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			navigator.BackToHome(s, i, cid, cache.ErogsMusicListStore, buildSearchMusicComponents)
 		}
 	}
-}
-
-// 查詢音樂列表
-func erogsSearchMusicListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.ErogsMusicListStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		components, err := buildSearchMusicComponents(cacheValue, 1, idStr)
-		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
-		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	logrus.WithField("interaction", i).Infof("erogs查詢音樂列表: %s", keyword)
-
-	res, err := erogs.SearchMusicListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.ErogsMusicListStore.Set(cacheKey, res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildSearchMusicComponents(res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
 }
 
 // 查詢遊戲列表(有CID版本)

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"kurohelper/cache"
@@ -21,7 +20,6 @@ import (
 	"kurohelper-core/ymgal"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 	"github.com/siongui/gojianfan"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -55,7 +53,13 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		}
 		switch optDB {
 		case "1":
-			vndbSearchGameListV2(s, i)
+			navigator.SearchList(s, i, cache.VndbGameListStore, "vndb查詢遊戲列表", func() ([]vndb.GetVnIDUseListResponse, error) {
+				keyword, err := utils.GetOptions(i, "keyword")
+				if err != nil {
+					return nil, err
+				}
+				return vndb.GetVnID(keyword)
+			}, buildVndbSearchGameComponents)
 		case "2":
 			erogsSearchGameListV2(s, i)
 		default:
@@ -86,73 +90,23 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 
 // 查詢遊戲列表
 func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.ErogsGameListStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		components, err := buildSearchGameComponents(cacheValue, 1, idStr)
+	navigator.SearchList(s, i, cache.ErogsGameListStore, "erogs查詢遊戲列表", func() ([]erogs.GameList, error) {
+		keyword, err := utils.GetOptions(i, "keyword")
 		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
+			return nil, err
 		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	// 條件符合就用月幕做跳板
-	if utils.IsAllHanziOrDigit(keyword) && strings.EqualFold(os.Getenv("USE_YMGAL_OPTIMIZATION"), "true") {
-		logrus.WithField("interaction", i).Infof("ymgal查詢遊戲(跳板): %s", keyword)
-		ymgalKeyword, err := ymgalGetGameString(keyword)
-		if err != nil {
-			logrus.WithField("guildID", i.GuildID).Warn(err)
+		if utils.IsAllHanziOrDigit(keyword) && strings.EqualFold(os.Getenv("USE_YMGAL_OPTIMIZATION"), "true") {
+			logrus.WithField("interaction", i).Infof("ymgal查詢遊戲(跳板): %s", keyword)
+			ymgalKeyword, ymgalErr := ymgalGetGameString(keyword)
+			if ymgalErr != nil {
+				logrus.WithField("guildID", i.GuildID).Warn(ymgalErr)
+			}
+			if strings.TrimSpace(ymgalKeyword) != "" {
+				keyword = ymgalKeyword
+			}
 		}
-
-		if strings.TrimSpace(ymgalKeyword) != "" {
-			keyword = ymgalKeyword
-		}
-	}
-
-	logrus.WithField("interaction", i).Infof("erogs查詢遊戲列表: %s", keyword)
-
-	res, err := erogs.SearchGameListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.ErogsGameListStore.Set(cacheKey, res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildSearchGameComponents(res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
+		return erogs.SearchGameListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+	}, buildSearchGameComponents)
 }
 
 // 查詢遊戲列表(有CID版本)
@@ -597,66 +551,6 @@ func ymgalGetGameString(keyword string) (string, error) {
 	})
 
 	return searchGameRes.Result[0].Name, nil
-}
-
-// VNDB V2 架構方法
-
-// 查詢 VNDB 遊戲列表
-func vndbSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.VndbGameListStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		components, err := buildVndbSearchGameComponents(cacheValue, 1, idStr)
-		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
-		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	logrus.WithField("interaction", i).Infof("vndb查詢遊戲列表: %s", keyword)
-
-	res, err := vndb.GetVnID(keyword)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.VndbGameListStore.Set(cacheKey, *res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildVndbSearchGameComponents(*res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
 }
 
 // 查詢 VNDB 遊戲列表(有CID版本)

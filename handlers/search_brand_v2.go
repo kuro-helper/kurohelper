@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"kurohelper/cache"
@@ -21,7 +20,6 @@ import (
 	kurohelperdb "kurohelper-db"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -46,7 +44,13 @@ func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 		}
 		switch optDB {
 		case "1":
-			vndbSearchBrandV2(s, i)
+			common.SearchList(s, i, cache.VndbBrandStore, "vndb查詢公司品牌", func() (*vndb.ProducerSearchResponse, error) {
+				keyword, err := utils.GetOptions(i, "keyword")
+				if err != nil {
+					return nil, err
+				}
+				return vndb.GetProducerByFuzzy(keyword, "")
+			}, buildSearchBrandComponents)
 		case "2":
 			erogsSearchBrandV2(s, i)
 		default:
@@ -76,64 +80,6 @@ func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			})
 		}
 	}
-}
-
-// 查詢公司品牌
-func vndbSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.VndbBrandStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		components, err := buildSearchBrandComponents(cacheValue, 1, idStr)
-		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
-		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	logrus.WithField("interaction", i).Infof("vndb查詢公司品牌: %s", keyword)
-
-	res, err := vndb.GetProducerByFuzzy(keyword, "")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.VndbBrandStore.Set(cacheKey, res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildSearchBrandComponents(res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
 }
 
 // 產生查詢公司品牌(有CID版本)
@@ -507,62 +453,16 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 // 批評空間
 
 func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.ErogsBrandStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-		components, err := buildSearchBrandErogsComponents(cacheValue, 1, idStr, hasPlayedMap, inWishMap)
+	common.SearchList(s, i, cache.ErogsBrandStore, "erogs查詢公司品牌", func() (*erogs.Brand, error) {
+		keyword, err := utils.GetOptions(i, "keyword")
 		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
+			return nil, err
 		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		return erogs.SearchBrandByKeyword([]string{keyword})
+	}, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
 	})
-
-	logrus.WithField("interaction", i).Infof("erogs查詢公司品牌: %s", keyword)
-
-	res, err := erogs.SearchBrandByKeyword([]string{keyword})
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.ErogsBrandStore.Set(cacheKey, res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-	components, err := buildSearchBrandErogsComponents(res, 1, idStr, hasPlayedMap, inWishMap)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
 }
 
 func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
