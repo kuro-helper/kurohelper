@@ -76,7 +76,7 @@ func Init(stopChan <-chan struct{}) {
 
 	store.InitUser()
 	// 掛載自動清除快取job
-	go cache.CleanCacheJob(360, stopChan)
+	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("CLEAN_CACHE_JOB_TIME", 720)), stopChan)
 }
 
 // ymgal init
