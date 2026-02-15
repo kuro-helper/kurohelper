@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
-	common "kurohelper/service/navigator"
+	common "kurohelper/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
 	"sort"
