@@ -58,63 +58,44 @@ func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			erogsSearchBrandV2(s, i)
 		}
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
 		// 選擇不同行為的進入點
 		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
 		case switchMode{'1', utils.PageBehavior}:
 			vndbSearchBrandWithCIDV2(s, i, cid)
 		case switchMode{'1', utils.SelectMenuBehavior}:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			vndbSearchBrandWithSelectMenuCIDV2(s, i, cid)
 		case switchMode{'1', utils.BackToHomeBehavior}:
-			common.BackToHome(s, i, cid, cache.VndbBrandStore, buildSearchBrandComponents)
+			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbBrandStore, buildSearchBrandComponents)
 		case switchMode{'2', utils.PageBehavior}:
 			erogsSearchBrandWithCIDV2(s, i, cid)
 		case switchMode{'2', utils.SelectMenuBehavior}:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandErogsCommandID)
 		case switchMode{'2', utils.BackToHomeBehavior}:
-			common.BackToHome(s, i, cid, cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
 				hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
 				return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
 			})
+		default:
+			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
+			return
 		}
 	}
 }
 
-// 產生查詢公司品牌(有CID版本)
-//
-// 目前只有翻頁事件
+// vndbSearchBrandWithCIDV2 查詢公司品牌(有CID版本)，目前只有翻頁事件
 func vndbSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.VndbBrandStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchBrandComponents(cacheValue, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
+	common.ChangePage(s, i, pageCID, cache.VndbBrandStore, buildSearchBrandComponents)
 }
 
 // 產生查詢公司品牌的Components
@@ -466,36 +447,15 @@ func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsBrandStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-	components, err := buildSearchBrandErogsComponents(cacheValue, pageCID.Value, pageCID.CacheID, hasPlayedMap, inWishMap)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
+	common.ChangePage(s, i, pageCID, cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
+		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
+	})
 }
 
 // getErogsUserPlayWishMaps 依互動取得使用者的已玩／願望清單對應的 GameErogsID set，供品牌頁顯示 ✅／❤️。

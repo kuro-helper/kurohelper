@@ -67,9 +67,6 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			erogsSearchGameListV2(s, i)
 		}
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
 		// 選擇不同行為的進入點
 		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
 		case switchMode{'1', utils.PageBehavior}:
@@ -77,13 +74,21 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		case switchMode{'2', utils.PageBehavior}:
 			erogsSearchGameListWithCIDV2(s, i, cid)
 		case switchMode{'1', utils.SelectMenuBehavior}:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			vndbSearchGameWithSelectMenuCIDV2(s, i, cid)
 		case switchMode{'2', utils.SelectMenuBehavior}:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameErogsCommandID)
 		case switchMode{'1', utils.BackToHomeBehavior}:
-			navigator.BackToHome(s, i, cid, cache.VndbGameListStore, buildVndbSearchGameComponents)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
 		case switchMode{'2', utils.BackToHomeBehavior}:
-			navigator.BackToHome(s, i, cid, cache.ErogsGameListStore, buildSearchGameComponents)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, buildSearchGameComponents)
+		default:
+			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
 }
@@ -111,36 +116,12 @@ func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 // 查詢遊戲列表(有CID版本)
 func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsGameListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchGameComponents(cacheValue, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.ErogsGameListStore, buildSearchGameComponents)
 }
 
 // 查詢單一遊戲資料(有CID版本，從選單選擇)
@@ -555,36 +536,12 @@ func ymgalGetGameString(keyword string) (string, error) {
 
 // 查詢 VNDB 遊戲列表(有CID版本)
 func vndbSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.VndbGameListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildVndbSearchGameComponents(cacheValue, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.VndbGameListStore, buildVndbSearchGameComponents)
 }
 
 // 查詢單一 VNDB 遊戲資料(有CID版本，從選單選擇)

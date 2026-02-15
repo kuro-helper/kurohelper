@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
 	"kurohelper/navigator"
 	"kurohelper/utils"
 
@@ -33,52 +34,30 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			return erogs.SearchMusicListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
 		}, buildSearchMusicComponents)
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
 		switch cid.GetBehaviorID() {
 		case utils.PageBehavior:
 			erogsSearchMusicListWithCIDV2(s, i, cid)
 		case utils.SelectMenuBehavior:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid)
 		case utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid, cache.ErogsMusicListStore, buildSearchMusicComponents)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
+		default:
+			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
 }
 
-// 查詢遊戲列表(有CID版本)
+// 查詢音樂列表(有CID版本)
 func erogsSearchMusicListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsMusicListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchMusicComponents(cacheValue, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
 }
 
 // 查詢指定音樂(有CID版本)

@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
 	"kurohelper/navigator"
 	"kurohelper/utils"
 
@@ -39,15 +40,15 @@ func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 			return erogs.SearchCreatorListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
 		}, buildSearchCreatorListComponents)
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
 		cmdID, behaviorID := cid.GetCommandID(), cid.GetBehaviorID()
 		switch {
 		case cmdID == searchCreatorGameSelectCommandID && behaviorID == utils.SelectMenuBehavior:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchCreatorDetailCommandID)
 		case cmdID == searchCreatorDetailCommandID && behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid, cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
 		case behaviorID == utils.PageBehavior:
 			if cmdID == searchCreatorDetailCommandID {
 				erogsSearchCreatorDetailWithCIDV2(s, i, cid)
@@ -55,79 +56,36 @@ func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 				erogsSearchCreatorListWithCIDV2(s, i, cid)
 			}
 		case behaviorID == utils.DetailBtnBehavior:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchCreatorWithSelectMenuCIDV2(s, i, cid)
 		case behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid, cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
 		default:
-			utils.HandleErrorV2(errors.New("error behavior id"), s, i, utils.InteractionRespondEditComplex)
+			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
 }
 
 // erogsSearchCreatorListWithCIDV2 創作者列表翻頁
 func erogsSearchCreatorListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsCreatorListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchCreatorListComponents(cacheValue, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
 }
 
 // erogsSearchCreatorDetailWithCIDV2 創作者詳情歷代作品翻頁（僅詳情，與列表完全無關）
 func erogsSearchCreatorDetailWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	creatorKey, err := cache.CIDStore.Get(pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	res, err := cache.ErogsCreatorStore.Get(creatorKey)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchCreatorDetailComponents(res, pageCID.Value, pageCID.CacheID)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
 }
 
 // erogsSearchCreatorWithSelectMenuCIDV2 以 CID 的 value 作為查詢 id 顯示創作者詳情（選單或按鈕「查看詳情」進入，統一取 cid value）
