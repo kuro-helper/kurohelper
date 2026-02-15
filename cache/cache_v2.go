@@ -4,8 +4,11 @@ import (
 	"sync"
 	"time"
 
-	kurohelpercore "github.com/kuro-helper/kurohelper-core/v3"
-	"github.com/kuro-helper/kurohelper-core/v3/erogs"
+	"kurohelper-core/bangumi"
+	"kurohelper-core/erogs"
+	"kurohelper-core/vndb"
+
+	kurohelpercore "kurohelper-core"
 )
 
 // CID快取
@@ -19,20 +22,39 @@ var (
 // 批評空間快取
 var (
 	// 使用關鍵字Base64作為鍵
-	ErogsGameListStore = NewCacheStoreV2[[]erogs.FuzzySearchListResponse](2 * time.Hour)
+	ErogsGameListStore = NewCacheStoreV2[[]erogs.GameList](2 * time.Hour)
 	// 使用批評空間ID作為鍵
-	ErogsGameStore = NewCacheStoreV2[*erogs.FuzzySearchGameResponse](2 * time.Hour)
+	ErogsGameStore = NewCacheStoreV2[*erogs.Game](2 * time.Hour)
 	// 使用關鍵字Base64作為鍵
 	ErogsMusicListStore = NewCacheStoreV2[[]erogs.MusicList](2 * time.Hour)
 	// 使用批評空間ID作為鍵
 	ErogsMusicStore = NewCacheStoreV2[*erogs.Music](2 * time.Hour)
+	// 使用關鍵字Base64作為鍵
+	ErogsBrandStore = NewCacheStoreV2[*erogs.Brand](2 * time.Hour)
+	// 創作者列表：使用關鍵字 Base64 作為鍵
+	ErogsCreatorListStore = NewCacheStoreV2[[]erogs.CreatorList](2 * time.Hour)
+	// 創作者詳情：使用 "e" + 創作者 ID 作為鍵
+	ErogsCreatorStore = NewCacheStoreV2[*erogs.Creator](2 * time.Hour)
 )
 
 // VNDB快取
-// var (
-// 	VndbGameListStore = NewCacheStoreV2[*vndb.ProducerSearchResponse](time.Hour)
-// 	VndbGameStore     = NewCacheStoreV2[*vndb.BasicResponse[vndb.GetVnUseIDResponse]](time.Hour)
-// )
+var (
+	// 使用關鍵字Base64作為鍵
+	VndbGameListStore = NewCacheStoreV2[[]vndb.GetVnIDUseListResponse](2 * time.Hour)
+	// 使用VNDB ID作為鍵 (遊戲詳細資料,可被遊戲搜尋和品牌搜尋共用)
+	VndbGameStore = NewCacheStoreV2[*vndb.BasicResponse[vndb.GetVnUseIDResponse]](2 * time.Hour)
+	// 使用關鍵字Base64作為鍵
+	VndbBrandStore = NewCacheStoreV2[*vndb.ProducerSearchResponse](2 * time.Hour)
+	// 角色列表：使用關鍵字 Base64 作為鍵
+	VndbCharacterListStore = NewCacheStoreV2[[]vndb.CharacterSearchResponse](2 * time.Hour)
+	// 角色詳情：使用 VNDB 角色 ID（如 c123）作為鍵
+	VndbCharacterStore = NewCacheStoreV2[*vndb.CharacterSearchResponse](2 * time.Hour)
+)
+
+// Bangumi快取(因為沒有任何CID事件，所以直接拿搜尋關鍵字做 base64 對應實際資料)
+var (
+	BangumiCharacterStore = NewCacheStoreV2[*bangumi.Character](2 * time.Hour)
+)
 
 // 月幕快取
 // var (

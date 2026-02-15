@@ -1,136 +1,63 @@
-package handlers
+package searchcmd
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
+	"kurohelper/navigator"
 	"kurohelper/utils"
 
-	kurohelpercore "github.com/kuro-helper/kurohelper-core/v3"
-	"github.com/kuro-helper/kurohelper-core/v3/erogs"
+	"kurohelper-core/erogs"
+
+	kurohelpercore "kurohelper-core"
 )
 
-const searchMusicListCachePrefix = "S@"
+const searchMusicCommandID = "M2"
 
 var searchMusicColor = 0xF8F8DF
 
 // 查詢音樂指令入口
 func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		erogsSearchMusicListV2(s, i)
+		navigator.SearchList(s, i, cache.ErogsMusicListStore, "erogs查詢音樂列表", func() ([]erogs.MusicList, error) {
+			keyword, err := utils.GetOptions(i, "keyword")
+			if err != nil {
+				return nil, err
+			}
+			return erogs.SearchMusicListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+		}, buildSearchMusicComponents)
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
 		switch cid.GetBehaviorID() {
 		case utils.PageBehavior:
 			erogsSearchMusicListWithCIDV2(s, i, cid)
 		case utils.SelectMenuBehavior:
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
 			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid)
 		case utils.BackToHomeBehavior:
-			erogsSearchMusicWithBackToHomeCIDV2(s, i, cid)
+			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
+		default:
+			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
 }
 
-// 查詢音樂列表
-func erogsSearchMusicListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	keyword, err := utils.GetOptions(i, "keyword")
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-		return
-	}
-
-	idStr := searchMusicListCachePrefix + uuid.New().String()
-
-	// 將 keyword 轉成 base64 作為快取鍵
-	cacheKey := base64.RawURLEncoding.EncodeToString([]byte(keyword))
-
-	// 檢查快取是否存在
-	cacheValue, err := cache.ErogsMusicListStore.Get(cacheKey)
-	if err == nil {
-		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
-
-		// 快取存在，直接使用，不需要延遲傳送
-		components, err := buildSearchMusicComponents(cacheValue, 1, idStr)
-		if err != nil {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
-			return
-		}
-		utils.InteractionRespondV2(s, i, components)
-		return
-	}
-
-	// 快取不存在，需要查詢資料
-	// 先發送延遲回應
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
-	logrus.WithField("interaction", i).Infof("erogs查詢音樂列表: %s", keyword)
-
-	res, err := erogs.GetMusicListByFuzzy(keyword)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	// 將查詢結果存入快取
-	cache.ErogsMusicListStore.Set(cacheKey, res)
-
-	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
-
-	components, err := buildSearchMusicComponents(res, 1, idStr)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
-}
-
-// 查詢遊戲列表(有CID版本)
+// 查詢音樂列表(有CID版本)
 func erogsSearchMusicListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.PageBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
 	pageCID, err := cid.ToPageCIDV2()
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheId)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsMusicListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchMusicComponents(cacheValue, pageCID.Value, pageCID.CacheId)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	utils.WebhookEditRespond(s, i, components)
+	navigator.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
 }
 
 // 查詢指定音樂(有CID版本)
@@ -156,7 +83,16 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
 			logrus.WithField("interaction", i).Infof("erogs查詢音樂: %s", selectMenuCID.Value)
-			res, err = erogs.GetMusicByFuzzy(selectMenuCID.Value, true)
+
+			cleanStr := strings.TrimPrefix(selectMenuCID.Value, "E")
+			cleanStr = strings.TrimPrefix(cleanStr, "e")
+			erogsID, err := strconv.Atoi(cleanStr)
+			if err != nil {
+				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+				return
+			}
+
+			res, err = erogs.SearchMusicByID(erogsID)
 			if err != nil {
 				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 				return
@@ -194,7 +130,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 	}
 
 	if thumbnailURL == "" {
-		thumbnailURL = placeholderImageURL
+		thumbnailURL = utils.PlaceholderImageURL
 	}
 
 	// 構建 Components
@@ -257,7 +193,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(selectMenuCID.CacheId))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchMusicCommandID, selectMenuCID.CacheID))
 
 	utils.InteractionRespondEditComplex(s, i, []discordgo.MessageComponent{
 		discordgo.Container{
@@ -265,35 +201,6 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 			Components:  containerComponents,
 		},
 	})
-}
-
-// 返回音樂列表主頁(有CID版本)
-func erogsSearchMusicWithBackToHomeCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	if cid.GetBehaviorID() != utils.BackToHomeBehavior {
-		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	backToHomeCID := cid.ToBackToHomeCIDV2()
-
-	cidCacheValue, err := cache.CIDStore.Get(backToHomeCID.CacheId)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	cacheValue, err := cache.ErogsMusicListStore.Get(cidCacheValue)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-
-	components, err := buildSearchMusicComponents(cacheValue, 1, backToHomeCID.CacheId)
-	if err != nil {
-		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-		return
-	}
-	utils.InteractionRespondEditComplex(s, i, components)
 }
 
 // 產生查詢音樂列表的Components
@@ -345,7 +252,7 @@ func buildSearchMusicComponents(res []erogs.MusicList, currentPage int, cacheID 
 			}
 		}
 		if strings.TrimSpace(thumbnailURL) == "" {
-			thumbnailURL = placeholderImageURL
+			thumbnailURL = utils.PlaceholderImageURL
 		}
 
 		containerComponents = append(containerComponents, discordgo.Section{
@@ -368,10 +275,10 @@ func buildSearchMusicComponents(res []erogs.MusicList, currentPage int, cacheID 
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(cacheID, gameMenuItems)
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchMusicCommandID, cacheID, "選擇音樂查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchMusicCommandID, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}

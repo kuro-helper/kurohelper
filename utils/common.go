@@ -1,21 +1,12 @@
 package utils
 
 import (
-	"cmp"
 	"os"
 	"strconv"
 	"time"
 
 	kurohelpererrors "kurohelper/errors"
 )
-
-// check if the string is English
-func IsEnglish(r rune) bool {
-	if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
-		return false
-	}
-	return true
-}
 
 // 取得env(轉型int版)
 func GetEnvInt(key string, def int) int {
@@ -66,6 +57,7 @@ func isDigit(r rune) bool {
 	return r >= '0' && r <= '9'
 }
 
+// 是否為中文字
 func isHanzi(r rune) bool {
 	switch {
 	// CJK Unified Ideographs (4E00–9FFF)
@@ -91,18 +83,4 @@ func isHanzi(r rune) bool {
 		return true
 	}
 	return false
-}
-
-func Max[T cmp.Ordered](a, b T) T {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func Min[T cmp.Ordered](a, b T) T {
-	if a < b {
-		return a
-	}
-	return b
 }

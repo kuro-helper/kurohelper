@@ -1,17 +1,22 @@
-package handlers
+package usercmd
 
 import (
 	"fmt"
-
 	"kurohelper/cache"
 	"kurohelper/utils"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
-	kurohelperdb "github.com/kuro-helper/kurohelper-db/v3"
+
+	kurohelperdb "kurohelper-db"
 )
 
-func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+type userRecordDataCache struct {
+	gameName string
+	gameID   int
+}
+
+func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -31,7 +36,7 @@ func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		userRecordDataCache := cacheValue.(userRecordDataCache)
 
 		// 刪除
-		kurohelperdb.DeleteUserInWish(userID, userRecordDataCache.gameID)
+		kurohelperdb.DeleteUserHasPlayed(userID, userRecordDataCache.gameID)
 
 		embed := &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("%s 刪除成功！", userRecordDataCache.gameName),
@@ -45,7 +50,7 @@ func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			return
 		}
 
-		data, err := kurohelperdb.FindUserInWishByUserAndGameNameLike(userID, opt)
+		data, err := kurohelperdb.FindUserHasPlayedByUserAndGameNameLike(userID, opt)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -67,7 +72,7 @@ func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "確認",
-					Value:  "你確定要刪除收藏嗎?",
+					Value:  "你確定要刪除已玩嗎?",
 					Inline: false,
 				},
 			},

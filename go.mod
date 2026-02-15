@@ -7,11 +7,11 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.10
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/kuro-helper/kurohelper-core/v3 v3.2.0
-	github.com/kuro-helper/kurohelper-db/v3 v3.1.0
 	github.com/siongui/gojianfan v0.0.0-20210926212422-2f175ac615de
 	github.com/sirupsen/logrus v1.9.3
 	gorm.io/gorm v1.31.1
+	kurohelper-core v0.0.0
+	kurohelper-db v0.0.0
 )
 
 require (

@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	kurohelpercore "github.com/kuro-helper/kurohelper-core/v3"
-	"github.com/kuro-helper/kurohelper-core/v3/vndb"
+	kurohelpercore "kurohelper-core"
+	"kurohelper-core/vndb"
 )
 
 // cache struct
@@ -69,17 +69,6 @@ func (c *CacheStore[T]) Get(key string) (T, error) {
 	}
 
 	return item.Value, nil
-}
-
-// Check 檢查快取存不存在或過期
-//
-// 如果存在且未過期，則返回true
-func (c *CacheStore[T]) Check(key string) bool {
-	c.mu.RLock()
-	item, ok := c.data[key]
-	c.mu.RUnlock()
-
-	return ok && !time.Now().After(item.ExpireAt)
 }
 
 // Clean 清除所有快取

@@ -19,6 +19,8 @@ var (
 	ErrCIDWrongFormat = errors.New("cid: wrong format")
 	// cid get parameter failed
 	ErrCIDGetParameterFailed = errors.New("cid: get parameter failed")
+	// cid behavior mismatch
+	ErrCIDBehaviorMismatch = errors.New("cid: behavior mismatch")
 )
 
 // Utils error

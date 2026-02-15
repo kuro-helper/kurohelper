@@ -1,25 +1,31 @@
-package handlers
+package usercmd
 
 import (
+	"errors"
 	"fmt"
+	kurohelpercore "kurohelper-core"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
+
+	kurohelperdb "kurohelper-db"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
-	kurohelperdb "github.com/kuro-helper/kurohelper-db/v3"
 
 	"gorm.io/gorm"
 
 	"kurohelper/cache"
+	kurohelpererrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
 
-	"github.com/kuro-helper/kurohelper-core/v3/erogs"
+	"kurohelper-core/erogs"
 )
 
-// 加收藏Handler
-func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+// 加已玩Handler
+func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -28,13 +34,23 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 	})
 
 	if cid != nil {
-		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(cid.GetCacheID())
+		addHasPlayedCID := utils.AddHasPlayedCID{
+			NewCID: *cid,
+		}
+
+		completeDate, err := addHasPlayedCID.GetCompleteDate()
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
-		resValue := cacheValue.(erogs.FuzzySearchGameResponse)
+
+		// get cache
+		cacheValue, err := cache.UserInfoCache.Get(addHasPlayedCID.GetCacheID())
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
+		resValue := cacheValue.(erogs.Game)
 		res := &resValue
 
 		userID := utils.GetUserID(i)
@@ -57,7 +73,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 				}
 
 				// 4. 建立資料
-				if err := kurohelperdb.CreateUserInWishTx(tx, userID, res.ID); err != nil {
+				if err := kurohelperdb.CreateUserHasPlayedTx(tx, userID, res.ID, completeDate); err != nil {
 					return err
 				}
 
@@ -75,18 +91,18 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 
 			embed := &discordgo.MessageEmbed{
 				Title: "加入成功！",
-				Color: 0x90B44B,
+				Color: 0x7BA23F,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		} else { // 找不到使用者，此狀況應該會是Discord官方問題或是程式碼邏輯問題
 			embed := &discordgo.MessageEmbed{
 				Title: "找不到使用者！",
-				Color: 0x90B44B,
+				Color: 0x7BA23F,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		}
 	} else {
-		var res *erogs.FuzzySearchGameResponse
+		var res *erogs.Game
 
 		keyword, err := utils.GetOptions(i, "keyword")
 		if err != nil {
@@ -94,8 +110,33 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 			return
 		}
 
+		completeDate, err := utils.GetOptions(i, "complete_date")
+		if err != nil && !errors.Is(err, kurohelpererrors.ErrOptionNotFound) {
+			utils.HandleError(err, s, i)
+			return
+		}
+
+		var t time.Time
+		if completeDate != "" {
+			t, err = utils.ParseYYYYMMDD(completeDate)
+			if err != nil {
+				utils.HandleError(err, s, i)
+				return
+			}
+
+			if t.After(time.Now().AddDate(0, 0, 1)) {
+				utils.HandleError(err, s, i)
+				return
+			}
+		}
+
 		idSearch, _ := regexp.MatchString(`^e\d+$`, keyword)
-		res, err = erogs.GetGameByFuzzy(keyword, idSearch)
+		if idSearch {
+			num, _ := strconv.Atoi(keyword[1:])
+			res, err = erogs.SearchGameByID(num)
+		} else {
+			res, err = erogs.SearchGameByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+		}
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -105,10 +146,10 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 		cache.UserInfoCache.Set(idStr, *res)
 
 		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDCommonComponent("✅", idStr, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{utils.MakeCIDAddHasPlayedComponent("✅", idStr, t, cidCommandName)}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
-		image := generateImage(i, res.BannerUrl)
+		image := utils.GenerateImage(i, res.BannerUrl)
 
 		embed := &discordgo.MessageEmbed{
 			Author: &discordgo.MessageEmbedAuthor{
@@ -116,7 +157,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 			},
 			Title: fmt.Sprintf("**%s(%s)**", res.Gamename, res.SellDay),
 			URL:   res.Shoukai,
-			Color: 0x90B44B,
+			Color: 0x7BA23F,
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "發行機種",
@@ -125,7 +166,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 				},
 				{
 					Name:   "確認",
-					Value:  "你確定要加入收藏嗎?",
+					Value:  "你確定要加入已玩嗎?",
 					Inline: false,
 				},
 			},

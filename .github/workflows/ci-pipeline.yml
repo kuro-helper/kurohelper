@@ -1,4 +1,4 @@
-name: Commit Lint
+name: CI Pipeline
 
 on:
   push:
@@ -9,15 +9,23 @@ on:
       - bugfix/*
       - hotfix/*
       - release/*
+      - test/*
       - refactor/*
       - ci/*
       - style/*
       - docs/*
-      # - test/*
+      - chore/*
   pull_request:
     branches:
       - main
 
 jobs:
-  call-commit-lint:
+  commit-lint:
     uses: kuro-helper/.github/.github/workflows/commit-lint.yml@main
+
+  go-build:
+    needs: commit-lint
+    uses: kuro-helper/.github/.github/workflows/go-build.yml@main
+    with:
+      use_kurohelpercore: 'main'
+      use_kurohelperdb: 'v3.1.0'

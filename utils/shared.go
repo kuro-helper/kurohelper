@@ -1,8 +1,11 @@
-package handlers
+package utils
+
+/*
+ * 暫放在這
+ */
 
 import (
 	"kurohelper/store"
-	"kurohelper/utils"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,11 +21,11 @@ const (
 )
 
 const (
-	placeholderImageURL = "https://image.kurohelper.com/docs/neneGIF.gif"
+	PlaceholderImageURL = "https://image.kurohelper.com/docs/neneGIF.gif"
 )
 
 // 資料分頁
-func pagination[T any](result *[]T, page int, useCache bool) bool {
+func Pagination[T any](result *[]T, page int, useCache bool) bool {
 	resultLen := len(*result)
 	expectedMin := page * 10
 	expectedMax := page*10 + 10
@@ -45,7 +48,7 @@ func pagination[T any](result *[]T, page int, useCache bool) bool {
 }
 
 // 資料分頁(回傳切片本身版本)
-func paginationR[T any](result []T, page int, useCache bool) ([]T, bool) {
+func PaginationR[T any](result []T, page int, useCache bool) ([]T, bool) {
 	resultLen := len(result)
 	expectedMin := page * 10
 	expectedMax := page*10 + 10
@@ -59,13 +62,13 @@ func paginationR[T any](result []T, page int, useCache bool) ([]T, bool) {
 		if resultLen > expectedMax {
 			return result[expectedMin:expectedMax], true
 		} else {
-			return result[utils.Min(expectedMin, resultLen):], false
+			return result[min(expectedMin, resultLen):], false
 		}
 	}
 }
 
 // 產生顯示圖片，會檢查白名單來判斷要不要顯示
-func generateImage(i *discordgo.InteractionCreate, url string) *discordgo.MessageEmbedImage {
+func GenerateImage(i *discordgo.InteractionCreate, url string) *discordgo.MessageEmbedImage {
 	var image *discordgo.MessageEmbedImage
 	if i.GuildID != "" {
 		// guild
@@ -76,7 +79,7 @@ func generateImage(i *discordgo.InteractionCreate, url string) *discordgo.Messag
 		}
 	} else {
 		// DM
-		userID := utils.GetUserID(i)
+		userID := GetUserID(i)
 		if _, ok := store.GuildDiscordAllowList[userID]; ok {
 			image = &discordgo.MessageEmbedImage{
 				URL: url,

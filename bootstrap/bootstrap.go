@@ -11,12 +11,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 
-	"github.com/kuro-helper/kurohelper-core/v3/erogs"
-	"github.com/kuro-helper/kurohelper-core/v3/seiya"
-	corestore "github.com/kuro-helper/kurohelper-core/v3/store"
-	"github.com/kuro-helper/kurohelper-core/v3/ymgal"
+	"kurohelper-core/erogs"
 
-	kurohelperdb "github.com/kuro-helper/kurohelper-db/v3"
+	"kurohelper-core/seiya"
+
+	corestore "kurohelper-core/store"
+
+	"kurohelper-core/ymgal"
+
+	kurohelperdb "kurohelper-db"
 )
 
 // 啟動函式
@@ -73,7 +76,7 @@ func Init(stopChan <-chan struct{}) {
 
 	store.InitUser()
 	// 掛載自動清除快取job
-	go cache.CleanCacheJob(360, stopChan)
+	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("CLEAN_CACHE_JOB_TIME", 720)), stopChan)
 }
 
 // ymgal init

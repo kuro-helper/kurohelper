@@ -1,4 +1,4 @@
-package handlers
+package vndbcmd
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 
 	"kurohelper/utils"
 
-	"github.com/kuro-helper/kurohelper-core/v3/vndb"
+	"kurohelper-core/vndb"
 )
 
 // vndb統計資料Handler

@@ -1,4 +1,4 @@
-package handlers
+package randomcmd
 
 import (
 	"errors"
@@ -9,8 +9,8 @@ import (
 	kurohelpererrors "kurohelper/errors"
 	"kurohelper/utils"
 
-	"github.com/kuro-helper/kurohelper-core/v3/vndb"
-	"github.com/kuro-helper/kurohelper-core/v3/ymgal"
+	"kurohelper-core/vndb"
+	"kurohelper-core/ymgal"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
@@ -47,7 +47,7 @@ func ymgalRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		title += "/" + game[0].ChineseName
 	}
 
-	image := generateImage(i, "https://store.ymgal.games/"+game[0].MainImg)
+	image := utils.GenerateImage(i, "https://store.ymgal.games/"+game[0].MainImg)
 
 	embed := &discordgo.MessageEmbed{
 		Title: title,
@@ -121,7 +121,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	// character block
 
-	characterMap := make(map[string]CharacterData) // map[characterID]CharacterData
+	characterMap := make(map[string]utils.CharacterData) // map[characterID]CharacterData
 	for _, va := range res.Results[0].Va {
 		characterName := va.Character.Original
 		if characterName == "" {
@@ -129,7 +129,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		for _, vn := range va.Character.Vns {
 			if vn.ID == res.Results[0].ID {
-				characterMap[va.Character.ID] = CharacterData{
+				characterMap[va.Character.ID] = utils.CharacterData{
 					Name: characterName,
 					Role: vn.Role,
 				}
@@ -139,7 +139,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	// 將 map 轉為 slice 並排序
-	characterList := make([]CharacterData, 0, len(characterMap))
+	characterList := make([]utils.CharacterData, 0, len(characterMap))
 	for _, character := range characterMap {
 		characterList = append(characterList, character)
 	}
@@ -170,7 +170,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	// 過濾色情/暴力圖片
-	image := generateImage(i, res.Results[0].Image.Url)
+	image := utils.GenerateImage(i, res.Results[0].Image.Url)
 	if res.Results[0].Image.Sexual >= 1 || res.Results[0].Image.Violence >= 1 {
 		image = nil
 		logrus.Debugf("%s 封面已過濾圖片顯示", gameTitle)
