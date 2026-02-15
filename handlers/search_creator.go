@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
-	"kurohelper/handlers/navigator"
+	"kurohelper/service/navigator"
 	"kurohelper/utils"
 
 	"kurohelper-core/erogs"
