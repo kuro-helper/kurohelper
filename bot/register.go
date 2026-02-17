@@ -23,7 +23,7 @@ func searchCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
 			Name:        "查詢遊戲",
-			Description: "根據關鍵字查詢遊戲資料",
+			Description: "根據關鍵字查詢遊戲資料(VNDB, 批評空間)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -51,7 +51,7 @@ func searchCommands() []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "查詢公司品牌",
-			Description: "根據關鍵字查詢公司品牌資料(VNDB)",
+			Description: "根據關鍵字查詢公司品牌資料(VNDB, 批評空間)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -79,7 +79,7 @@ func searchCommands() []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "查詢音樂",
-			Description: "根據關鍵字查詢音樂資料(ErogameScape)",
+			Description: "根據關鍵字查詢音樂資料(批評空間)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -91,7 +91,7 @@ func searchCommands() []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "查詢創作者",
-			Description: "根據關鍵字查詢創作者資料(ErogameScape)",
+			Description: "根據關鍵字查詢創作者資料(批評空間)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -103,7 +103,7 @@ func searchCommands() []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "查詢角色",
-			Description: "根據關鍵字查詢角色資料",
+			Description: "根據關鍵字查詢角色資料(VNDB, Bangumi)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
