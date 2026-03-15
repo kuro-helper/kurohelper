@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 
 	"kurohelper/bootstrap"
@@ -41,7 +41,7 @@ func main() {
 
 	// Fiber server
 	app := fiber.New()
-	app.Post("/github-actions", func(c *fiber.Ctx) error {
+	app.Post("/github-actions", func(c fiber.Ctx) error {
 		auth := c.Get("Authorization")
 		if auth != "Bearer "+token {
 			return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
@@ -84,7 +84,7 @@ func main() {
 	<-fiberDone
 }
 
-func PushSend(kuroHelper *discordgo.Session, c *fiber.Ctx) error {
+func PushSend(kuroHelper *discordgo.Session, c fiber.Ctx) error {
 	branch := c.FormValue("branch")
 	hash := c.FormValue("hash")
 	fullHash := c.FormValue("full_hash")
