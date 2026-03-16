@@ -1,50 +1,50 @@
 package cache
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 // 清除Cache排程
 //
 // 先不檢查快取存活時間，統一全部清除
 func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
-	logrus.Print("CleanCacheJob 正在啟動...")
+	slog.Info("CleanCacheJob 正在啟動...")
 	ticker := time.NewTicker(minute * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			// 清除Cache
-			logrus.Printf("%d筆SearchCache快取已被清除", SearchCache.Clean())
-			logrus.Printf("%d筆UserInfoCache快取已被清除", UserInfoCache.Clean())
-			// logrus.Printf("%d筆SubmitDataCache快取已被清除", SubmitDataCache.Clean())
-			logrus.Printf("%d筆SearchBrandCache快取已被清除", SearchBrandCache.Clean())
+			slog.Info(fmt.Sprintf("%d筆SearchCache快取已被清除", SearchCache.Clean()))
+			slog.Info(fmt.Sprintf("%d筆UserInfoCache快取已被清除", UserInfoCache.Clean()))
+			// slog.Info(fmt.Sprintf("%d筆SubmitDataCache快取已被清除", SubmitDataCache.Clean()))
+			slog.Info(fmt.Sprintf("%d筆SearchBrandCache快取已被清除", SearchBrandCache.Clean()))
 
 			// 新快取(V2)
 			egsDC, egsC := CIDStore.Clean()
-			logrus.Printf("CIDStore               快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("CIDStore               快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsGameListStore.Clean()
-			logrus.Printf("ErogsGameListStore     快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsGameListStore     快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsGameStore.Clean()
-			logrus.Printf("ErogsGameStore         快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsGameStore         快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsMusicListStore.Clean()
-			logrus.Printf("ErogsMusicListStore    快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsMusicListStore    快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsMusicStore.Clean()
-			logrus.Printf("ErogsMusicStore        快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsMusicStore        快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsCreatorListStore.Clean()
-			logrus.Printf("ErogsCreatorListStore  快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsCreatorListStore  快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsCreatorStore.Clean()
-			logrus.Printf("ErogsCreatorStore      快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("ErogsCreatorStore      快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = VndbCharacterListStore.Clean()
-			logrus.Printf("VndbCharacterListStore 快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("VndbCharacterListStore 快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = VndbCharacterStore.Clean()
-			logrus.Printf("VndbCharacterStore     快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("VndbCharacterStore     快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = BangumiCharacterStore.Clean()
-			logrus.Printf("BangumiCharacterStore  快取資料: %d筆/%d筆 (清理/總數)", egsC, egsDC)
+			slog.Info(fmt.Sprintf("BangumiCharacterStore  快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 		case <-stopChan:
-			logrus.Println("CleanCacheJob 正在關閉...")
+			slog.Info("CleanCacheJob 正在關閉...")
 			return
 		}
 	}

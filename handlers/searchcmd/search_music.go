@@ -3,11 +3,11 @@ package searchcmd
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
@@ -82,7 +82,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 	res, err := cache.ErogsMusicStore.Get(selectMenuCID.Value)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("interaction", i).Infof("erogs查詢音樂: %s", selectMenuCID.Value)
+			slog.Info("erogs查詢音樂", "musicID", selectMenuCID.Value)
 
 			cleanStr := strings.TrimPrefix(selectMenuCID.Value, "E")
 			cleanStr = strings.TrimPrefix(cleanStr, "e")

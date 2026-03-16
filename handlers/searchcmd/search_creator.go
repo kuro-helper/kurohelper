@@ -3,6 +3,7 @@ package searchcmd
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	kurohelpercore "kurohelper-core"
 	"sort"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
@@ -106,7 +106,7 @@ func erogsSearchCreatorWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.In
 	res, err := cache.ErogsCreatorStore.Get(creatorKey)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("guildID", i.GuildID).Infof("erogs查詢創作者: %s", creatorKey)
+			slog.Info("erogs查詢創作者", "creatorKey", creatorKey)
 			cleanStr := strings.TrimPrefix(creatorKey, "E")
 			cleanStr = strings.TrimPrefix(cleanStr, "e")
 			creatorID, err := strconv.Atoi(cleanStr)

@@ -1,8 +1,10 @@
 package bot
 
 import (
+	"fmt"
+	"log/slog"
+
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 )
 
 // 註冊命令
@@ -13,7 +15,7 @@ func RegisterCommand(s *discordgo.Session) {
 	for _, cmd := range globalCmds {
 		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd)
 		if err != nil {
-			logrus.Errorf("register global slash command failed: %s", err)
+			slog.Error(fmt.Sprintf("register global slash command failed: %s", err.Error()))
 		}
 	}
 }
