@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	kurohelpercore "kurohelper-core"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 
 	"kurohelper/cache"
 	kurohelperrerrors "kurohelper/errors"
@@ -200,7 +200,7 @@ func vndbSearchCharacterWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.I
 	res, err := cache.VndbCharacterStore.Get(selectMenuCID.Value)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("guildID", i.GuildID).Infof("vndb查詢角色ID: %s", selectMenuCID.Value)
+			slog.Info("vndb查詢角色ID", "charID", selectMenuCID.Value)
 			res, err = vndb.GetCharacterByID(selectMenuCID.Value)
 			if err != nil {
 				utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
@@ -381,7 +381,7 @@ func bangumiSearchCharacter(s *discordgo.Session, i *discordgo.InteractionCreate
 			utils.HandleErrorV2(err, s, i, utils.InteractionRespondV2)
 			return
 		}
-		logrus.WithField("guildID", i.GuildID).Infof("Bangumi查詢角色: %s", keyword)
+		slog.Info("Bangumi查詢角色", "keyword", keyword, "guildID", i.GuildID)
 		cache.BangumiCharacterStore.Set(cacheKey, res)
 	}
 

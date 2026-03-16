@@ -8,6 +8,7 @@ import (
 	"kurohelper/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
+	"log/slog"
 	"os"
 	"sort"
 	"strconv"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/siongui/gojianfan"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	kurohelperdb "kurohelper-db"
@@ -101,10 +101,10 @@ func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate)
 			return nil, err
 		}
 		if utils.IsAllHanziOrDigit(keyword) && strings.EqualFold(os.Getenv("USE_YMGAL_OPTIMIZATION"), "true") {
-			logrus.WithField("interaction", i).Infof("ymgal查詢遊戲(跳板): %s", keyword)
+			slog.Info("ymgal查詢遊戲(跳板)", "keyword", keyword, "guildID", i.GuildID)
 			ymgalKeyword, ymgalErr := ymgalGetGameString(keyword)
 			if ymgalErr != nil {
-				logrus.WithField("guildID", i.GuildID).Warn(ymgalErr)
+				slog.Warn(ymgalErr.Error(), "guildID", i.GuildID)
 			}
 			if strings.TrimSpace(ymgalKeyword) != "" {
 				keyword = ymgalKeyword
@@ -146,7 +146,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	res, err := cache.ErogsGameStore.Get(selectMenuCID.Value)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("guildID", i.GuildID).Infof("erogs查詢遊戲: %s", selectMenuCID.Value)
+			slog.Info("erogs查詢遊戲", "gameID", selectMenuCID.Value, "guildID", i.GuildID)
 
 			cleanStr := strings.TrimPrefix(selectMenuCID.Value, "E")
 			cleanStr = strings.TrimPrefix(cleanStr, "e")
@@ -516,7 +516,7 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 
 // 月幕查詢遊戲名稱處理
 func ymgalGetGameString(keyword string) (string, error) {
-	logrus.Debugf("ymgal查詢遊戲: %s", keyword)
+	slog.Debug("ymgal查詢遊戲", "keyword", keyword)
 
 	searchGameRes, err := ymgal.SearchGame(gojianfan.T2S(keyword))
 	if err != nil {
@@ -566,7 +566,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	res, err := cache.VndbGameStore.Get(selectMenuCID.Value)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("guildID", i.GuildID).Infof("vndb查詢遊戲: %s", selectMenuCID.Value)
+			slog.Info("vndb查詢遊戲", "vnID", selectMenuCID.Value, "guildID", i.GuildID)
 
 			res, err = vndb.GetVNByID(selectMenuCID.Value)
 			if err != nil {
@@ -748,7 +748,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	// 過濾色情/暴力圖片
 	if res.Results[0].Image.Sexual >= 1 || res.Results[0].Image.Violence >= 1 {
 		thumbnailURL = ""
-		logrus.WithField("guildID", i.GuildID).Infof("%s 封面已過濾圖片顯示", gameTitle)
+		slog.Info("封面已過濾圖片顯示", "gameTitle", gameTitle, "guildID", i.GuildID)
 	}
 
 	// 檢查是否允許顯示圖片

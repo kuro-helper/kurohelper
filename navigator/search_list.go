@@ -2,12 +2,13 @@ package navigator
 
 import (
 	"encoding/base64"
+	"fmt"
 	"kurohelper/cache"
 	"kurohelper/utils"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 )
 
 // 處理「關鍵字搜尋列表」的完整流程：檢查快取、無快取則查詢並延遲回應。
@@ -60,7 +61,7 @@ func SearchList[T any](
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 
-	logrus.WithField("interaction", i).Infof("%s: %s", logPrefix, keyword)
+	slog.Info(fmt.Sprintf("%s: %s", logPrefix, keyword), "guildID", i.GuildID)
 
 	res, err := searcher()
 	if err != nil {

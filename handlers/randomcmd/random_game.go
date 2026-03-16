@@ -3,6 +3,7 @@ package randomcmd
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -13,7 +14,6 @@ import (
 	"kurohelper-core/ymgal"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 )
 
 // 隨機遊戲Handler
@@ -83,7 +83,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	} else {
 		brandTitle = res.Results[0].Developers[0].Name
 	}
-	logrus.WithField("guildID", i.GuildID).Infof("隨機遊戲: %s", gameTitle)
+	slog.Info("隨機遊戲", "gameTitle", gameTitle, "guildID", i.GuildID)
 	// staff block
 	var scenario string
 	var art string
@@ -173,7 +173,7 @@ func vndbRandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	image := utils.GenerateImage(i, res.Results[0].Image.Url)
 	if res.Results[0].Image.Sexual >= 1 || res.Results[0].Image.Violence >= 1 {
 		image = nil
-		logrus.Debugf("%s 封面已過濾圖片顯示", gameTitle)
+		slog.Debug("封面已過濾圖片顯示", "gameTitle", gameTitle)
 	}
 
 	embed := &discordgo.MessageEmbed{

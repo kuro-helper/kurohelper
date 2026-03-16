@@ -1,9 +1,10 @@
 package store
 
 import (
-	kurohelperdb "kurohelper-db"
+	"log/slog"
+	"os"
 
-	"github.com/sirupsen/logrus"
+	kurohelperdb "kurohelper-db"
 )
 
 var (
@@ -16,12 +17,14 @@ var (
 func InitAllowList() {
 	guildDiscordAllowList, err := kurohelperdb.GetDiscordAllowListByKind("guild")
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	dmDiscordAllowList, err := kurohelperdb.GetDiscordAllowListByKind("dm")
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	// 存進快取
@@ -39,7 +42,8 @@ func InitAllowList() {
 func InitUser() {
 	user, err := kurohelperdb.GetUsers()
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	// 存進快取

@@ -8,6 +8,7 @@ import (
 	common "kurohelper/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,7 +21,6 @@ import (
 	kurohelperdb "kurohelper-db"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -215,7 +215,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	res, err := cache.VndbGameStore.Get(selectMenuCID.Value)
 	if err != nil {
 		if errors.Is(err, kurohelpercore.ErrCacheLost) {
-			logrus.WithField("guildID", i.GuildID).Infof("vndb搜尋遊戲: %s", selectMenuCID.Value)
+			slog.Info("vndb搜尋遊戲", "vnID", selectMenuCID.Value)
 
 			res, err = vndb.GetVNByFuzzy(selectMenuCID.Value)
 			if err != nil {
@@ -333,7 +333,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	imageURL := res.Results[0].Image.Url
 	if res.Results[0].Image.Sexual >= 1 || res.Results[0].Image.Violence >= 1 {
 		imageURL = ""
-		logrus.WithField("guildID", i.GuildID).Infof("%s 封面已過濾圖片顯示", gameTitle)
+		slog.Info("封面已過濾圖片顯示", "gameTitle", gameTitle, "guildID", i.GuildID)
 	} else {
 		// 檢查是否允許顯示圖片
 		if i.GuildID != "" {

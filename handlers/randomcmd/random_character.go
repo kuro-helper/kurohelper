@@ -5,6 +5,7 @@ import (
 	"fmt"
 	kurohelpererrors "kurohelper/errors"
 	"kurohelper/utils"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"kurohelper-core/vndb"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 )
 
 // 隨機角色Handler
@@ -47,7 +47,7 @@ func vndbRandomCharacter(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	if res.Original != "" {
 		nameData = fmt.Sprintf("%s (%s)", res.Original, res.Name)
 	}
-	logrus.WithField("guildID", i.GuildID).Infof("隨機角色: %s", nameData)
+	slog.Info("隨機角色", "name", nameData, "guildID", i.GuildID)
 	if len(res.Aliases) == 0 {
 		res.Aliases = []string{"未收錄"}
 	}

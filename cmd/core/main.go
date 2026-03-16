@@ -1,11 +1,11 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"os/signal"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 
 	"kurohelper/bootstrap"
 	"kurohelper/bot"
@@ -14,30 +14,32 @@ import (
 func main() {
 	// 初始化專案作業
 	stopChan := make(chan struct{})
-	bootstrap.Init(stopChan)
+	bootstrap.BasicInit(stopChan)
 
 	token := os.Getenv("BOT_TOKEN")
 	kuroHelper, err := discordgo.New("Bot " + token)
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	kuroHelper.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages | discordgo.IntentsMessageContent
 
-	logrus.Info("KuroHelper is now running. Press CTRL+C to exit.")
+	slog.Info("KuroHelper is now running. Press CTRL+C to exit.")
 
 	kuroHelper.AddHandler(bot.Ready)
 	kuroHelper.AddHandler(bot.OnInteraction)
 
 	err = kuroHelper.Open() // websocket connect
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	interruptSignal := <-c
-	logrus.Debug(interruptSignal)
+	slog.Debug(interruptSignal.String())
 
 	// 關閉 jobs
 	close(stopChan)

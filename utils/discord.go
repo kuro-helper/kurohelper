@@ -1,10 +1,10 @@
 package utils
 
 import (
+	"log/slog"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 
 	kurohelpererrors "kurohelper/errors"
 )
@@ -38,7 +38,7 @@ func InteractionEmbedRespond(s *discordgo.Session, i *discordgo.InteractionCreat
 			Components: &comps,
 		})
 		if err != nil {
-			logrus.Error(err)
+			slog.Error(err.Error())
 			InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
 		}
 	} else {
@@ -69,7 +69,7 @@ func InteractionEmbedRespondForSelf(s *discordgo.Session, i *discordgo.Interacti
 			Components: &comps,
 		})
 		if err != nil {
-			logrus.Error(err)
+			slog.Error(err.Error())
 			InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
 		}
 	} else {
@@ -191,7 +191,7 @@ func InteractionRespondV2(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		},
 	})
 	if err != nil {
-		logrus.Error(err)
+		slog.Error(err.Error())
 		InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
 	}
 }
@@ -203,7 +203,7 @@ func WebhookEditRespond(s *discordgo.Session, i *discordgo.InteractionCreate, co
 		Components: &components,
 	})
 	if err != nil {
-		logrus.Error(err)
+		slog.Error(err.Error())
 		InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
 	}
 }
@@ -216,7 +216,7 @@ func InteractionRespondEditComplex(s *discordgo.Session, i *discordgo.Interactio
 		Components: &components,
 	})
 	if err != nil {
-		logrus.Error(err)
+		slog.Error(err.Error())
 		InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
 	}
 }

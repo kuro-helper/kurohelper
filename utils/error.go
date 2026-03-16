@@ -2,9 +2,9 @@ package utils
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	kurohelpererrors "kurohelper/errors"
@@ -16,7 +16,7 @@ import (
 
 // 錯誤統一處理方法
 func HandleError(err error, s *discordgo.Session, i *discordgo.InteractionCreate) {
-	logrus.WithField("guildID", i.GuildID).Error(err)
+	slog.Error(err.Error(), "guildID", i.GuildID)
 	switch {
 	case errors.Is(err, kurohelperdb.ErrUniqueViolation):
 		InteractionEmbedRespond(s, i, MakeErrorEmbedMsg("資料已存在，此次操作無效"), nil, true)
@@ -59,7 +59,7 @@ func HandleErrorV2(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,
 	responder func(*discordgo.Session, *discordgo.InteractionCreate, []discordgo.MessageComponent)) {
-	logrus.WithField("guildID", i.GuildID).Error(err)
+	slog.Error(err.Error(), "guildID", i.GuildID)
 
 	errMsg := "該功能目前異常，請稍後再嘗試"
 	switch {

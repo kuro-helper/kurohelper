@@ -4,12 +4,13 @@ import (
 	"kurohelper/cache"
 	"kurohelper/store"
 	"kurohelper/utils"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
+	"github.com/lmittmann/tint"
 
 	"kurohelper-core/erogs"
 
@@ -22,18 +23,25 @@ import (
 	kurohelperdb "kurohelper-db"
 )
 
-// 啟動函式
-func Init(stopChan <-chan struct{}) {
-	// logrus settings
-	logrus.SetFormatter(&logrus.TextFormatter{
-		ForceColors:   true,
-		FullTimestamp: true,
-	})
-	logrus.SetLevel(logrus.DebugLevel)
+func init() {
+	// log settings
+	w := os.Stderr
+	logger := slog.New(
+		tint.NewHandler(w, &tint.Options{
+			Level:      slog.LevelDebug,
+			TimeFormat: time.Stamp,
+		}),
+	)
+	slog.SetDefault(logger)
+}
+
+// 基本啟動函式
+func BasicInit(stopChan <-chan struct{}) {
 	// load .env
 	err := godotenv.Load(".env")
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	config := kurohelperdb.Config{
@@ -45,7 +53,8 @@ func Init(stopChan <-chan struct{}) {
 
 	err = kurohelperdb.InitDsn(config)
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	kurohelperdb.Migration(kurohelperdb.Dbs) // 選填
 
@@ -63,14 +72,16 @@ func Init(stopChan <-chan struct{}) {
 	// seiya init
 	err = seiya.Init()
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	// ymgal init
 	if strings.EqualFold(os.Getenv("INIT_YMGAL"), "true") {
 		err = ymgalInit()
 		if err != nil {
-			logrus.Fatal(err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
