@@ -11,6 +11,10 @@ import (
 func RegisterCommand(s *discordgo.Session) {
 	var globalCmds []*discordgo.ApplicationCommand
 	globalCmds = append(globalCmds, searchCommands()...)
+	globalCmds = append(globalCmds, randomCommands()...)
+	globalCmds = append(globalCmds, userCommands()...)
+	globalCmds = append(globalCmds, vndbCommands()...)
+	globalCmds = append(globalCmds, commands()...)
 
 	for _, cmd := range globalCmds {
 		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd)
@@ -270,6 +274,9 @@ func commands() []*discordgo.ApplicationCommand {
 			Name:        "幫助",
 			Description: "獲取機器人相關使用教學",
 		},
+		{
+			Name:        "運勢",
+			Description: "抽抽今天的運勢",
+		},
 	}
-
 }

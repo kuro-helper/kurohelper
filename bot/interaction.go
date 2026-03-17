@@ -28,6 +28,8 @@ func onInteractionApplicationCommand(s *discordgo.Session, i *discordgo.Interact
 	switch i.ApplicationCommandData().Name {
 	case "幫助":
 		go handlers.Helper(s, i)
+	case "運勢":
+		go handlers.Fortune(s, i)
 	case "vndb統計資料":
 		go vndbcmd.VndbStats(s, i)
 	case "查詢遊戲":
