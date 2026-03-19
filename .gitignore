@@ -36,3 +36,4 @@ debug/
 
 # build script
 build.bat
+*.log

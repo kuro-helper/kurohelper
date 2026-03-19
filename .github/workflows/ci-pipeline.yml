@@ -28,5 +28,5 @@ jobs:
     uses: kuro-helper/.github/.github/workflows/go-build.yml@main
     with:
       use_kurohelpercore: "main"
-      use_kurohelperdb: "v3.1.0"
+      use_kurohelperdb: "chore/logger-silent"
       use_kurohelperproxy: "main"

@@ -6,11 +6,13 @@ import (
 	"kurohelper/utils"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
+	slogmulti "github.com/samber/slog-multi"
 
 	"kurohelper-core/erogs"
 
@@ -24,25 +26,54 @@ import (
 )
 
 func init() {
+	// load .env
+	err := godotenv.Load(".env")
+	if err != nil {
+		panic(err)
+	}
+
 	// log settings
-	w := os.Stderr
-	logger := slog.New(
-		tint.NewHandler(w, &tint.Options{
-			Level:      slog.LevelDebug,
-			TimeFormat: time.Stamp,
-		}),
-	)
+	logDir := os.Getenv("LOG_PATH")
+	info, err := os.Stat(logDir)
+	if os.IsNotExist(err) {
+		panic(err)
+	}
+
+	if !info.IsDir() {
+		panic("path is not a directory")
+	}
+
+	// make a no color log
+	logFile, err := os.OpenFile(filepath.Join(logDir, "kurohelper-nocolor.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		panic(err)
+	}
+
+	standardLogHandler := tint.NewHandler(os.Stdout, &tint.Options{
+		Level:      slog.LevelDebug,
+		TimeFormat: time.Stamp,
+	})
+
+	noColorLogHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.String(slog.TimeKey, a.Value.Time().Format(time.Stamp))
+			}
+			return a
+		},
+	})
+
+	logger := slog.New(slogmulti.Fanout(
+		standardLogHandler,
+		noColorLogHandler,
+	))
+
 	slog.SetDefault(logger)
 }
 
 // 基本啟動函式
 func BasicInit(stopChan <-chan struct{}) {
-	// load .env
-	err := godotenv.Load(".env")
-	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
-	}
 
 	config := kurohelperdb.Config{
 		DBOwner:    os.Getenv("DB_OWNER"),
@@ -51,7 +82,7 @@ func BasicInit(stopChan <-chan struct{}) {
 		DBPort:     os.Getenv("DB_PORT"),
 	}
 
-	err = kurohelperdb.InitDsn(config)
+	err := kurohelperdb.InitDsn(config)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
