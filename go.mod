@@ -11,8 +11,7 @@ require (
 	github.com/samber/slog-multi v1.7.1
 	github.com/siongui/gojianfan v0.0.0-20210926212422-2f175ac615de
 	gorm.io/gorm v1.31.1
-	kurohelper-core v0.0.0
-	kurohelper-db v0.0.0
+	kurohelperservice v0.0.0
 )
 
 require (
@@ -43,5 +42,4 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
-	kurohelper-proxy v0.0.0 // indirect
 )

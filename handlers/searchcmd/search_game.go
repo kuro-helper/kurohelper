@@ -3,28 +3,27 @@ package searchcmd
 import (
 	"errors"
 	"fmt"
-	"kurohelper/cache"
-	kurohelperrerrors "kurohelper/errors"
-	"kurohelper/navigator"
-	"kurohelper/store"
-	"kurohelper/utils"
 	"log/slog"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 
-	kurohelpercore "kurohelper-core"
-	"kurohelper-core/erogs"
-	"kurohelper-core/seiya"
-	"kurohelper-core/vndb"
-	"kurohelper-core/ymgal"
+	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
+	"kurohelper/navigator"
+	"kurohelper/store"
+	"kurohelper/utils"
+	"kurohelperservice"
+	kurohelperdb "kurohelperservice/db"
+	"kurohelperservice/provider/erogs"
+	"kurohelperservice/provider/seiya"
+	"kurohelperservice/provider/vndb"
+	"kurohelperservice/provider/ymgal"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/siongui/gojianfan"
 	"gorm.io/gorm"
-
-	kurohelperdb "kurohelper-db"
 )
 
 const (
@@ -110,7 +109,7 @@ func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate)
 				keyword = ymgalKeyword
 			}
 		}
-		return erogs.SearchGameListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+		return erogs.SearchGameListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 	}, buildSearchGameComponents)
 }
 
@@ -145,7 +144,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	res, err := cache.ErogsGameStore.Get(selectMenuCID.Value)
 	if err != nil {
-		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+		if errors.Is(err, kurohelperservice.ErrCacheLost) {
 			slog.Info("erogs查詢遊戲", "gameID", selectMenuCID.Value, "guildID", i.GuildID)
 
 			cleanStr := strings.TrimPrefix(selectMenuCID.Value, "E")
@@ -173,7 +172,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	// 處理使用者資訊
 	userID := utils.GetUserID(i)
 	var userData string
-	_, err = kurohelperdb.GetUserHasPlayed(userID, res.ID)
+	_, err = kurohelperdb.GetUserHasPlayedByUserAndGameID(kurohelperdb.Dbs, userID, res.ID)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
@@ -182,7 +181,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	} else {
 		userData += "✅"
 	}
-	_, err = kurohelperdb.GetUserInWish(userID, res.ID)
+	_, err = kurohelperdb.GetUserInWishByUserAndGameID(kurohelperdb.Dbs, userID, res.ID)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
@@ -524,7 +523,7 @@ func ymgalGetGameString(keyword string) (string, error) {
 	}
 
 	if len(searchGameRes.Result) == 0 {
-		return "", kurohelpercore.ErrSearchNoContent
+		return "", kurohelperservice.ErrSearchNoContent
 	}
 
 	sort.Slice(searchGameRes.Result, func(i, j int) bool {
@@ -565,7 +564,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 
 	res, err := cache.VndbGameStore.Get(selectMenuCID.Value)
 	if err != nil {
-		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+		if errors.Is(err, kurohelperservice.ErrCacheLost) {
 			slog.Info("vndb查詢遊戲", "vnID", selectMenuCID.Value, "guildID", i.GuildID)
 
 			res, err = vndb.GetVNByID(selectMenuCID.Value)

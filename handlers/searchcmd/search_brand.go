@@ -3,22 +3,20 @@ package searchcmd
 import (
 	"errors"
 	"fmt"
-	"kurohelper/cache"
-	kurohelperrerrors "kurohelper/errors"
-	common "kurohelper/navigator"
-	"kurohelper/store"
-	"kurohelper/utils"
 	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 
-	kurohelpercore "kurohelper-core"
-	"kurohelper-core/erogs"
-
-	"kurohelper-core/vndb"
-
-	kurohelperdb "kurohelper-db"
+	"kurohelper/cache"
+	kurohelperrerrors "kurohelper/errors"
+	common "kurohelper/navigator"
+	"kurohelper/store"
+	"kurohelper/utils"
+	"kurohelperservice"
+	kurohelperdb "kurohelperservice/db"
+	"kurohelperservice/provider/erogs"
+	"kurohelperservice/provider/vndb"
 
 	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm"
@@ -197,7 +195,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	// 檢查 CID 快取是否存在
 	if _, err := cache.CIDStore.Get(selectMenuCID.CacheID); err != nil {
-		utils.HandleErrorV2(kurohelpercore.ErrCacheLost, s, i, utils.InteractionRespondEditComplex)
+		utils.HandleErrorV2(kurohelperservice.ErrCacheLost, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
 
@@ -214,7 +212,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	// 嘗試從快取取得單一遊戲資料
 	res, err := cache.VndbGameStore.Get(selectMenuCID.Value)
 	if err != nil {
-		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+		if errors.Is(err, kurohelperservice.ErrCacheLost) {
 			slog.Info("vndb搜尋遊戲", "vnID", selectMenuCID.Value)
 
 			res, err = vndb.GetVNByFuzzy(selectMenuCID.Value)
@@ -469,14 +467,14 @@ func getErogsUserPlayWishMaps(i *discordgo.InteractionCreate) (hasPlayedMap, inW
 	if _, ok := store.UserStore[userID]; !ok {
 		return hasPlayedMap, inWishMap
 	}
-	userHasPlayed, err := kurohelperdb.SelectUserHasPlayed(userID)
+	userHasPlayed, err := kurohelperdb.GetUserHasPlayedByID(kurohelperdb.Dbs, userID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return hasPlayedMap, inWishMap
 	}
 	for _, item := range userHasPlayed {
 		hasPlayedMap[item.GameErogsID] = struct{}{}
 	}
-	userInWish, err := kurohelperdb.SelectUserInWish(userID)
+	userInWish, err := kurohelperdb.GetUserInWishByID(kurohelperdb.Dbs, userID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return hasPlayedMap, inWishMap
 	}

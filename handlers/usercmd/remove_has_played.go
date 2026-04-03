@@ -8,7 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 
-	kurohelperdb "kurohelper-db"
+	kurohelperdb "kurohelperservice/db"
 )
 
 type userRecordDataCache struct {
@@ -36,7 +36,7 @@ func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 		userRecordDataCache := cacheValue.(userRecordDataCache)
 
 		// 刪除
-		kurohelperdb.DeleteUserHasPlayed(userID, userRecordDataCache.gameID)
+		kurohelperdb.DeleteUserHasPlayed(kurohelperdb.Dbs, userID, userRecordDataCache.gameID)
 
 		embed := &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("%s 刪除成功！", userRecordDataCache.gameName),
@@ -50,7 +50,7 @@ func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 			return
 		}
 
-		data, err := kurohelperdb.FindUserHasPlayedByUserAndGameNameLike(userID, opt)
+		data, err := kurohelperdb.GetUserHasPlayedByUserAndGameNameLike(kurohelperdb.Dbs, userID, opt)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return

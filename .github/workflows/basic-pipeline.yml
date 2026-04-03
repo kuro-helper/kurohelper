@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: Basic Pipeline
 
 on:
   push:
@@ -27,6 +27,4 @@ jobs:
     needs: commit-lint
     uses: kuro-helper/.github/.github/workflows/go-build.yml@main
     with:
-      use_kurohelpercore: "main"
-      use_kurohelperdb: "chore/logger-silent"
-      use_kurohelperproxy: "main"
+      use_kurohelperservice: "main"

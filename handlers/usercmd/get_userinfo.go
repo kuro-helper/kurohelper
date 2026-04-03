@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	kurohelperdb "kurohelper-db"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 
 	"kurohelper/cache"
 	"kurohelper/utils"
+
+	kurohelperdb "kurohelperservice/db"
 )
 
 type UserInfo struct {
@@ -111,7 +111,7 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 		userID := utils.GetUserID(i)
 
 		// User資料
-		userTmp, err := kurohelperdb.GetUser(userID)
+		userTmp, err := kurohelperdb.GetUser(kurohelperdb.Dbs, userID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -128,7 +128,7 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 		avatar = avatarURL
 
 		// 已玩資料
-		userHasPlayed, err := kurohelperdb.SelectUserHasPlayed(userID)
+		userHasPlayed, err := kurohelperdb.GetUserHasPlayedByID(kurohelperdb.Dbs, userID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -136,7 +136,7 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 		hasPlayedCount = len(userHasPlayed)
 
 		// 收藏資料
-		userInWish, err := kurohelperdb.SelectUserInWish(userID)
+		userInWish, err := kurohelperdb.GetUserInWishByID(kurohelperdb.Dbs, userID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return

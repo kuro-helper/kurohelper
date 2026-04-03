@@ -14,15 +14,13 @@ import (
 	"github.com/lmittmann/tint"
 	slogmulti "github.com/samber/slog-multi"
 
-	"kurohelper-core/erogs"
+	"kurohelperservice/provider/erogs"
+	"kurohelperservice/provider/seiya"
+	"kurohelperservice/provider/ymgal"
 
-	"kurohelper-core/seiya"
+	corestore "kurohelperservice/store"
 
-	corestore "kurohelper-core/store"
-
-	"kurohelper-core/ymgal"
-
-	kurohelperdb "kurohelper-db"
+	kurohelperdb "kurohelperservice/db"
 )
 
 func init() {

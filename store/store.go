@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	kurohelperdb "kurohelper-db"
+	"kurohelperservice/db"
 )
 
 var (
@@ -15,13 +15,13 @@ var (
 )
 
 func InitAllowList() {
-	guildDiscordAllowList, err := kurohelperdb.GetDiscordAllowListByKind("guild")
+	guildDiscordAllowList, err := db.GetDiscordAllowListByKind(db.Dbs, "guild")
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
 	}
 
-	dmDiscordAllowList, err := kurohelperdb.GetDiscordAllowListByKind("dm")
+	dmDiscordAllowList, err := db.GetDiscordAllowListByKind(db.Dbs, "dm")
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
@@ -40,7 +40,7 @@ func InitAllowList() {
 //
 // 目的是檢查使用者的時候不用先檢查他是否在資料庫，可以直接決定要產生User紀錄還是直接抓出資料
 func InitUser() {
-	user, err := kurohelperdb.GetUsers()
+	user, err := db.GetAllUsers(db.Dbs)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
