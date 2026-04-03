@@ -142,6 +142,10 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			utils.HandleError(err, s, i)
 			return
 		}
+		if res == nil {
+			utils.HandleError(kurohelperservice.ErrSearchNoContent, s, i)
+			return
+		}
 
 		idStr := uuid.New().String()
 		cache.UserInfoCache.Set(idStr, *res)

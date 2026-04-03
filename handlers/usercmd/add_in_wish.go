@@ -105,6 +105,14 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 		} else {
 			res, err = erogs.SearchGameByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 		}
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
+		if res == nil {
+			utils.HandleError(kurohelperservice.ErrSearchNoContent, s, i)
+			return
+		}
 
 		idStr := uuid.New().String()
 		cache.UserInfoCache.Set(idStr, *res)
