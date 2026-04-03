@@ -102,14 +102,10 @@ func PushSend(kuroHelper *discordgo.Session, c fiber.Ctx) error {
 	switch strings.TrimSpace(repoName) {
 	case "kurohelper":
 		color = 0xF8C3CD
-	case "kurohelper-core":
+	case "kurohelper-service":
 		color = 0x373C38
-	case "kurohelper-proxy":
-		color = 0x1B813E
 	case "kurohelper-docs":
 		color = 0x268785
-	case "kurohelper-db":
-		color = 0x6699A1
 	case "kurohelper-api":
 		color = 0xFFBA84
 	case "kurohelper-web-nextjs":

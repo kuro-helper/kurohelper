@@ -6,10 +6,10 @@ import (
 	"kurohelper/cache"
 	"kurohelper/utils"
 
-	kurohelperdb "kurohelper-db"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
+
+	kurohelperdb "kurohelperservice/db"
 )
 
 func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
@@ -32,7 +32,7 @@ func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		userRecordDataCache := cacheValue.(userRecordDataCache)
 
 		// 刪除
-		kurohelperdb.DeleteUserInWish(userID, userRecordDataCache.gameID)
+		kurohelperdb.DeleteUserInWish(kurohelperdb.Dbs, userID, userRecordDataCache.gameID)
 
 		embed := &discordgo.MessageEmbed{
 			Title: fmt.Sprintf("%s 刪除成功！", userRecordDataCache.gameName),
@@ -46,7 +46,7 @@ func RemoveInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			return
 		}
 
-		data, err := kurohelperdb.FindUserInWishByUserAndGameNameLike(userID, opt)
+		data, err := kurohelperdb.GetUserInWishByUserAndGameNameLike(kurohelperdb.Dbs, userID, opt)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return

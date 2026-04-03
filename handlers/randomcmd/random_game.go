@@ -10,8 +10,8 @@ import (
 	kurohelpererrors "kurohelper/errors"
 	"kurohelper/utils"
 
-	"kurohelper-core/vndb"
-	"kurohelper-core/ymgal"
+	"kurohelperservice/provider/vndb"
+	"kurohelperservice/provider/ymgal"
 
 	"github.com/bwmarrin/discordgo"
 )

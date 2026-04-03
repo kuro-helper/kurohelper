@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	kurohelpercore "kurohelper-core"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -17,10 +16,9 @@ import (
 	"kurohelper/navigator"
 	"kurohelper/store"
 	"kurohelper/utils"
-
-	"kurohelper-core/vndb"
-
-	"kurohelper-core/bangumi"
+	"kurohelperservice"
+	"kurohelperservice/provider/bangumi"
+	"kurohelperservice/provider/vndb"
 )
 
 const (
@@ -199,7 +197,7 @@ func vndbSearchCharacterWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.I
 	var res *vndb.CharacterSearchResponse
 	res, err := cache.VndbCharacterStore.Get(selectMenuCID.Value)
 	if err != nil {
-		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+		if errors.Is(err, kurohelperservice.ErrCacheLost) {
 			slog.Info("vndb查詢角色ID", "charID", selectMenuCID.Value)
 			res, err = vndb.GetCharacterByID(selectMenuCID.Value)
 			if err != nil {

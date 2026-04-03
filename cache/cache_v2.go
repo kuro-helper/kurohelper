@@ -4,11 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"kurohelper-core/bangumi"
-	"kurohelper-core/erogs"
-	"kurohelper-core/vndb"
-
-	kurohelpercore "kurohelper-core"
+	"kurohelperservice"
+	"kurohelperservice/provider/bangumi"
+	"kurohelperservice/provider/erogs"
+	"kurohelperservice/provider/vndb"
 )
 
 // CID快取
@@ -106,7 +105,7 @@ func (c *CacheStoreV2[T]) Get(key string) (T, error) {
 		delete(c.data, key)
 		c.mu.Unlock()
 		var zero T
-		return zero, kurohelpercore.ErrCacheLost
+		return zero, kurohelperservice.ErrCacheLost
 	}
 
 	return item.Value, nil

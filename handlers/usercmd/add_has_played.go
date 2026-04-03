@@ -3,25 +3,24 @@ package usercmd
 import (
 	"errors"
 	"fmt"
-	kurohelpercore "kurohelper-core"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	kurohelperdb "kurohelper-db"
+	"gorm.io/gorm"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 
-	"gorm.io/gorm"
+	"kurohelperservice"
+	kurohelperdb "kurohelperservice/db"
+	"kurohelperservice/provider/erogs"
 
 	"kurohelper/cache"
 	kurohelpererrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
-
-	"kurohelper-core/erogs"
 )
 
 // 加已玩Handler
@@ -58,22 +57,24 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		if strings.TrimSpace(userID) != "" && strings.TrimSpace(userName) != "" {
 			err := kurohelperdb.Dbs.Transaction(func(tx *gorm.DB) error {
 				// 1. 確保 User 存在
-				if _, err := kurohelperdb.EnsureUserTx(tx, userID, userName); err != nil {
+				if _, err := kurohelperdb.EnsureUser(tx, userID, userName); err != nil {
 					return err
 				}
 
 				// 2. 確保 Brand 存在
-				if _, err := kurohelperdb.EnsureBrandErogsTx(tx, res.BrandID, res.BrandName); err != nil {
+				// 新增欄位資料先用預設值
+				if _, err := kurohelperdb.EnsureBrandErogs(tx, res.BrandID, res.BrandName, false, 0); err != nil {
 					return err
 				}
 
 				// 3. 確保 Game 存在
-				if _, err := kurohelperdb.EnsureGameErogsTx(tx, res.ID, res.Gamename, res.BrandID); err != nil {
+				// 圖片先用預設值
+				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, utils.PlaceholderImageURL, res.BrandID); err != nil {
 					return err
 				}
 
 				// 4. 建立資料
-				if err := kurohelperdb.CreateUserHasPlayedTx(tx, userID, res.ID, completeDate); err != nil {
+				if err := kurohelperdb.CreateUserHasPlayed(tx, userID, res.ID, completeDate); err != nil {
 					return err
 				}
 
@@ -135,7 +136,7 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			num, _ := strconv.Atoi(keyword[1:])
 			res, err = erogs.SearchGameByID(num)
 		} else {
-			res, err = erogs.SearchGameByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+			res, err = erogs.SearchGameByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 		}
 		if err != nil {
 			utils.HandleError(err, s, i)

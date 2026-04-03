@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"kurohelper-core/vndb"
+	"kurohelperservice/provider/vndb"
 
 	"github.com/bwmarrin/discordgo"
 )

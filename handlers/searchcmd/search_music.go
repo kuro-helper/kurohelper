@@ -14,9 +14,8 @@ import (
 	"kurohelper/navigator"
 	"kurohelper/utils"
 
-	"kurohelper-core/erogs"
-
-	kurohelpercore "kurohelper-core"
+	"kurohelperservice"
+	"kurohelperservice/provider/erogs"
 )
 
 const searchMusicCommandID = "M2"
@@ -31,7 +30,7 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			if err != nil {
 				return nil, err
 			}
-			return erogs.SearchMusicListByKeyword([]string{keyword, kurohelpercore.ZhTwToJp(keyword)})
+			return erogs.SearchMusicListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 		}, buildSearchMusicComponents)
 	} else {
 		switch cid.GetBehaviorID() {
@@ -81,7 +80,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 
 	res, err := cache.ErogsMusicStore.Get(selectMenuCID.Value)
 	if err != nil {
-		if errors.Is(err, kurohelpercore.ErrCacheLost) {
+		if errors.Is(err, kurohelperservice.ErrCacheLost) {
 			slog.Info("erogs查詢音樂", "musicID", selectMenuCID.Value)
 
 			cleanStr := strings.TrimPrefix(selectMenuCID.Value, "E")

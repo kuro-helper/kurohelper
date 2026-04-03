@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	kurohelpercore "kurohelper-core"
-	"kurohelper-core/vndb"
+	"kurohelperservice"
+	"kurohelperservice/provider/vndb"
 )
 
 // cache struct
@@ -65,7 +65,7 @@ func (c *CacheStore[T]) Get(key string) (T, error) {
 		delete(c.data, key)
 		c.mu.Unlock()
 		var zero T
-		return zero, kurohelpercore.ErrCacheLost
+		return zero, kurohelperservice.ErrCacheLost
 	}
 
 	return item.Value, nil
