@@ -40,7 +40,7 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid)
+			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchMusicCommandID)
 		case utils.BackToHomeBehavior:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
 		default:
@@ -59,8 +59,8 @@ func erogsSearchMusicListWithCIDV2(s *discordgo.Session, i *discordgo.Interactio
 	navigator.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
 }
 
-// 查詢指定音樂(有CID版本)
-func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+// 查詢指定音樂(有CID版本)；backHomeCommandID 用於「返回」鈕對應的 command（例如從歌手詳情進入時傳 SD2）
+func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, backHomeCommandID string) {
 	if cid.GetBehaviorID() != utils.SelectMenuBehavior {
 		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
 		return
@@ -192,7 +192,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchMusicCommandID, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(backHomeCommandID, selectMenuCID.CacheID))
 
 	utils.InteractionRespondEditComplex(s, i, []discordgo.MessageComponent{
 		discordgo.Container{
