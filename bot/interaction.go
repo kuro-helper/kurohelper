@@ -42,6 +42,8 @@ func onInteractionApplicationCommand(s *discordgo.Session, i *discordgo.Interact
 		go searchcmd.SearchMusicV2(s, i, nil)
 	case "查詢角色":
 		go searchcmd.SearchCharacterV2(s, i, nil)
+	case "查詢歌手":
+		go searchcmd.SearchSinger(s, i, nil)
 	case "加已玩":
 		go usercmd.AddHasPlayed(s, i, nil)
 	case "加收藏":
@@ -106,6 +108,8 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 			go searchcmd.SearchCreatorV2(s, i, cid)
 		case 'H':
 			go searchcmd.SearchCharacterV2(s, i, cid)
+		case 'S':
+			go searchcmd.SearchSinger(s, i, cid)
 		default:
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return

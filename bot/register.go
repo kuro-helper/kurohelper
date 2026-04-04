@@ -108,6 +108,18 @@ func searchCommands() []*discordgo.ApplicationCommand {
 			},
 		},
 		{
+			Name:        "查詢歌手",
+			Description: "[新]根據關鍵字查詢歌手相關資料(批評空間)",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "keyword",
+					Description: "關鍵字",
+					Required:    true,
+				},
+			},
+		},
+		{
 			Name:        "查詢角色",
 			Description: "根據關鍵字查詢角色資料(VNDB, Bangumi)",
 			Options: []*discordgo.ApplicationCommandOption{

@@ -37,12 +37,17 @@ func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
 			slog.Info(fmt.Sprintf("ErogsCreatorListStore  快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsCreatorStore.Clean()
 			slog.Info(fmt.Sprintf("ErogsCreatorStore      快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+			egsDC, egsC = ErogsSingerListStore.Clean()
+			slog.Info(fmt.Sprintf("ErogsSingerListStore   快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+			egsDC, egsC = ErogsSingerStore.Clean()
+			slog.Info(fmt.Sprintf("ErogsSingerStore       快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = VndbCharacterListStore.Clean()
 			slog.Info(fmt.Sprintf("VndbCharacterListStore 快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = VndbCharacterStore.Clean()
 			slog.Info(fmt.Sprintf("VndbCharacterStore     快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = BangumiCharacterStore.Clean()
 			slog.Info(fmt.Sprintf("BangumiCharacterStore  快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+
 		case <-stopChan:
 			slog.Info("CleanCacheJob 正在關閉...")
 			return
