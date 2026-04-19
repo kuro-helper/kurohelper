@@ -20,6 +20,16 @@ func OnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		onInteractionApplicationCommand(s, i)
 	case discordgo.InteractionMessageComponent:
 		onInteractionMessageComponent(s, i)
+	case discordgo.InteractionApplicationCommandAutocomplete:
+		onInteractionAutocomplete(s, i)
+	}
+}
+
+func onInteractionAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+	switch data.Name {
+	case "查詢遊戲":
+		go searchcmd.HandleGameAutocomplete(s, i)
 	}
 }
 

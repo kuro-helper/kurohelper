@@ -896,3 +896,63 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 		},
 	}, nil
 }
+
+func HandleGameAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+
+	// 找出目前使用者正在打字的那個選項
+	var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+	for _, opt := range data.Options {
+		if opt.Focused {
+			focusedOption = opt
+			break
+		}
+	}
+
+	if focusedOption == nil {
+		return
+	}
+
+	// 取得目前輸入的文字
+	userInput := focusedOption.StringValue()
+	userInput = strings.ToLower(userInput)
+	queryRunes := []rune(userInput)
+
+	if len(queryRunes) < 2 {
+		return
+	}
+
+	var choices []*discordgo.ApplicationCommandOptionChoice
+	if len(erogs.GamesName) == 0 {
+		slog.Warn("ErogsGameAutoComplete has not been initialized...")
+		return
+	}
+
+	targetIndices, ok := erogs.InvertedIndex[queryRunes[0]]
+	if !ok {
+		return
+	}
+
+	limit := 15
+
+	for _, idx := range targetIndices {
+		name := erogs.GamesName[idx]
+		if strings.Contains(strings.ToLower(name), userInput) {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  name,
+				Value: name,
+			})
+		}
+
+		if len(choices) >= limit {
+			break
+		}
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
+}

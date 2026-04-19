@@ -14,13 +14,11 @@ import (
 	"github.com/lmittmann/tint"
 	slogmulti "github.com/samber/slog-multi"
 
+	service "kurohelperservice"
+	"kurohelperservice/db"
 	"kurohelperservice/provider/erogs"
 	"kurohelperservice/provider/seiya"
 	"kurohelperservice/provider/ymgal"
-
-	corestore "kurohelperservice/store"
-
-	kurohelperdb "kurohelperservice/db"
 )
 
 func init() {
@@ -73,30 +71,31 @@ func init() {
 // 基本啟動函式
 func BasicInit(stopChan <-chan struct{}) {
 
-	config := kurohelperdb.Config{
+	config := db.Config{
 		DBOwner:    os.Getenv("DB_OWNER"),
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 		DBPort:     os.Getenv("DB_PORT"),
 	}
 
-	err := kurohelperdb.InitDsn(config)
+	err := db.InitDsn(config)
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
 	}
-	kurohelperdb.Migration(kurohelperdb.Dbs) // 選填
+	db.Migration(db.Dbs) // 選填
 
 	// 將白名單存成快取
 	store.InitAllowList()
 
 	// init ZhtwToJp var
-	corestore.InitZhtwToJp()
+	service.InitZhtwToJp()
 
-	corestore.InitSeiyaCorrespond()
+	seiya.InitSeiyaCorrespond()
 
-	// erogs rate limit init
+	// erogs init
 	erogs.InitRateLimit(time.Duration(utils.GetEnvInt("EROGS_RATE_LIMIT_RESET_TIME", 10)))
+	erogs.InitErogsGameAutoComplete(os.Getenv("EROGS_GAME_AUTOCOMPLETE_FILE"))
 
 	// seiya init
 	err = seiya.Init()
