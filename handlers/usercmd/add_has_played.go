@@ -68,8 +68,11 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 				}
 
 				// 3. 確保 Game 存在
-				// 圖片先用預設值
-				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, utils.PlaceholderImageURL, res.BrandID); err != nil {
+				image := erogs.MakeDMMImageURL(res.DMM)
+				if strings.TrimSpace(res.DMM) == "" {
+					image = ""
+				}
+				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, image, res.BrandID); err != nil {
 					return err
 				}
 
