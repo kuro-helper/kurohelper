@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -21,12 +21,12 @@ import (
 )
 
 const (
-	searchCreatorListItemsPerPage    = 10
-	searchCreatorItemsPerPage        = 7
-	searchCreatorCommandName         = "查詢創作者"
-	searchCreatorListRouteKey        = "list"
-	searchCreatorDetailRouteKey      = "detail"
-	searchCreatorGameSelectRouteKey  = "game_select" // 從創作者詳情選遊戲跳轉，回到上一頁用 detail
+	searchCreatorListItemsPerPage   = 10
+	searchCreatorItemsPerPage       = 7
+	searchCreatorCommandName        = "查詢創作者"
+	searchCreatorListRouteKey       = "list"
+	searchCreatorDetailRouteKey     = "detail"
+	searchCreatorGameSelectRouteKey = "game_select" // 從創作者詳情選遊戲跳轉，回到上一頁用 detail
 )
 
 var searchCreatorColor = 0xF8F8DF

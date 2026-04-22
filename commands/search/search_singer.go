@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -21,12 +21,12 @@ import (
 )
 
 const (
-	searchSingerItemsPerPage         = 10
-	searchSingerDetailItemsPerPage   = 7
-	searchSingerCommandName          = "查詢歌手"
-	searchSingerListRouteKey         = "list"
-	searchSingerDetailRouteKey       = "detail"
-	searchSingerMusicSelectRouteKey  = "music_select"
+	searchSingerItemsPerPage        = 10
+	searchSingerDetailItemsPerPage  = 7
+	searchSingerCommandName         = "查詢歌手"
+	searchSingerListRouteKey        = "list"
+	searchSingerDetailRouteKey      = "detail"
+	searchSingerMusicSelectRouteKey = "music_select"
 )
 
 var searchSingerColor = 0x7DD3FC

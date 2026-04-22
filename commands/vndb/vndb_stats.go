@@ -1,4 +1,4 @@
-package vndbcmd
+package vndb
 
 import (
 	"fmt"

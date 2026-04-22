@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"

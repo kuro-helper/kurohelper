@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -23,10 +23,10 @@ import (
 )
 
 const (
-	searchBrandItemsPerPage   = 7
-	searchBrandCommandName    = "查詢公司品牌"
-	searchBrandVNDBRouteKey   = "vndb"
-	searchBrandErogsRouteKey  = "erogs"
+	searchBrandItemsPerPage  = 7
+	searchBrandCommandName   = "查詢公司品牌"
+	searchBrandVNDBRouteKey  = "vndb"
+	searchBrandErogsRouteKey = "erogs"
 )
 
 var (

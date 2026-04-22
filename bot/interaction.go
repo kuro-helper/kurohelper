@@ -6,12 +6,12 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"kurohelper/commands"
+	"kurohelper/commands/random"
+	"kurohelper/commands/search"
+	"kurohelper/commands/user"
+	"kurohelper/commands/vndb"
 	kurohelpererrors "kurohelper/errors"
-	"kurohelper/handlers"
-	"kurohelper/handlers/randomcmd"
-	"kurohelper/handlers/searchcmd"
-	"kurohelper/handlers/usercmd"
-	"kurohelper/handlers/vndbcmd"
 	"kurohelper/utils"
 )
 
@@ -33,26 +33,26 @@ type Autocompleter interface {
 // 要使用的指令
 var commandMap = map[string]SlashCommand{
 	// 主要專用指令
-	"查詢遊戲":   &searchcmd.SearchGame{},
-	"查詢公司品牌": &searchcmd.SearchBrand{},
-	"查詢創作者":  &searchcmd.SearchCreator{},
-	"查詢角色":   &searchcmd.SearchCharacter{},
-	"查詢音樂":   &searchcmd.SearchMusic{},
-	"查詢歌手":   &searchcmd.SearchSinger{},
+	"查詢遊戲":   &search.SearchGame{},
+	"查詢公司品牌": &search.SearchBrand{},
+	"查詢創作者":  &search.SearchCreator{},
+	"查詢角色":   &search.SearchCharacter{},
+	"查詢音樂":   &search.SearchMusic{},
+	"查詢歌手":   &search.SearchSinger{},
 	// 隨機相關指令
-	"隨機遊戲": &randomcmd.RandomGame{},
-	"隨機角色": &randomcmd.RandomCharacter{},
+	"隨機遊戲": &random.RandomGame{},
+	"隨機角色": &random.RandomCharacter{},
 	// 使用者相關指令
-	"個人資料": &usercmd.GetUserinfo{},
-	"加已玩":  &usercmd.AddHasPlayed{},
-	"加收藏":  &usercmd.AddInWish{},
-	"刪除已玩": &usercmd.RemoveHasPlayed{},
-	"刪除收藏": &usercmd.RemoveInWish{},
+	"個人資料": &user.GetUserinfo{},
+	"加已玩":  &user.AddHasPlayed{},
+	"加收藏":  &user.AddInWish{},
+	"刪除已玩": &user.RemoveHasPlayed{},
+	"刪除收藏": &user.RemoveInWish{},
 	// vndb專用指令
-	"vndb統計資料": &vndbcmd.VNDBStats{},
+	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令
-	"運勢": &handlers.Fortune{},
-	"幫助": &handlers.Helper{},
+	"運勢": &commands.Fortune{},
+	"幫助": &commands.Helper{},
 }
 
 // 註冊命令

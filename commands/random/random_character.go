@@ -1,4 +1,4 @@
-package randomcmd
+package random
 
 import (
 	"errors"
