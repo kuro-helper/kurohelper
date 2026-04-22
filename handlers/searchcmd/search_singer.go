@@ -23,14 +23,36 @@ import (
 const (
 	searchSingerItemsPerPage         = 10
 	searchSingerDetailItemsPerPage   = 7
-	searchSingerListCommandID        = "S2"
-	searchSingerDetailCommandID      = "SD2"
-	searchSingerMusicSelectCommandID = "SM2"
+	searchSingerCommandName          = "查詢歌手"
+	searchSingerListRouteKey         = "list"
+	searchSingerDetailRouteKey       = "detail"
+	searchSingerMusicSelectRouteKey  = "music_select"
 )
 
 var searchSingerColor = 0x7DD3FC
 
-func SearchSinger(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+type SearchSinger struct{}
+
+func (ss *SearchSinger) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢歌手",
+		Description: "[新]根據關鍵字查詢歌手相關資料(批評空間)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+		},
+	}
+}
+
+func (ss *SearchSinger) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ss.HandleComponent(s, i, nil)
+}
+
+func (ss *SearchSinger) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		navigator.SearchList(s, i, cache.ErogsSingerListStore, "erogs查詢歌手列表", func() ([]erogs.CreatorList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
@@ -40,17 +62,17 @@ func SearchSinger(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			return erogs.SearchSingerListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 		}, buildSearchSingerListComponents)
 	} else {
-		cmdID, behaviorID := cid.GetCommandID(), cid.GetBehaviorID()
+		routeKey, behaviorID := cid.GetRouteKey(), cid.GetBehaviorID()
 		switch {
-		case cmdID == searchSingerMusicSelectCommandID && behaviorID == utils.SelectMenuBehavior:
+		case routeKey == searchSingerMusicSelectRouteKey && behaviorID == utils.SelectMenuBehavior:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchSingerDetailCommandID)
-		case cmdID == searchSingerDetailCommandID && behaviorID == utils.BackToHomeBehavior:
+			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchSingerCommandName, searchSingerDetailRouteKey)
+		case routeKey == searchSingerDetailRouteKey && behaviorID == utils.BackToHomeBehavior:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsSingerStore, buildSearchSingerDetailComponents)
 		case behaviorID == utils.PageBehavior:
-			if cmdID == searchSingerDetailCommandID {
+			if routeKey == searchSingerDetailRouteKey {
 				erogsSearchSingerDetailWithCIDV2(s, i, cid)
 			} else {
 				erogsSearchSingerListWithCIDV2(s, i, cid)
@@ -225,12 +247,12 @@ func buildSearchSingerDetailComponents(res *erogs.Singer, currentPage int, pageC
 	}
 
 	if len(musicMenuItems) > 0 {
-		selectMenuComponents := utils.MakeSelectMenuComponent(musicMenuItems, searchSingerMusicSelectCommandID, pageCacheID, "選擇音樂查看詳細")
+		selectMenuComponents := utils.MakeSelectMenuComponent(musicMenuItems, searchSingerCommandName, searchSingerMusicSelectRouteKey, pageCacheID, "選擇音樂查看詳細")
 		containerComponents = append(containerComponents, discordgo.Separator{Divider: &divider}, selectMenuComponents)
 	}
 
 	if totalItems > searchSingerDetailItemsPerPage {
-		pageComponents, err := utils.MakeChangePageComponent(searchSingerDetailCommandID, currentPage, totalPages, pageCacheID)
+		pageComponents, err := utils.MakeChangePageComponent(searchSingerCommandName, searchSingerDetailRouteKey, currentPage, totalPages, pageCacheID)
 		if err != nil {
 			return nil, err
 		}
@@ -278,12 +300,12 @@ func buildSearchSingerListComponents(res []erogs.CreatorList, currentPage int, c
 			Accessory: discordgo.Button{
 				Label:    "查看詳情",
 				Style:    discordgo.PrimaryButton,
-				CustomID: utils.MakeDetailBtnCIDV2(searchSingerListCommandID, cacheID, "e"+strconv.Itoa(r.ID)),
+				CustomID: utils.MakeDetailBtnCIDV2(searchSingerCommandName, searchSingerListRouteKey, cacheID, "e"+strconv.Itoa(r.ID)),
 			},
 		})
 	}
 
-	pageComponents, err := utils.MakeChangePageComponent(searchSingerListCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchSingerCommandName, searchSingerListRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}

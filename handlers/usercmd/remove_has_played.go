@@ -2,21 +2,38 @@ package usercmd
 
 import (
 	"fmt"
-	"kurohelper/cache"
+	kurohelpererrors "kurohelper/errors"
 	"kurohelper/utils"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 
 	kurohelperdb "kurohelperservice/db"
 )
 
-type userRecordDataCache struct {
-	gameName string
-	gameID   int
+type RemoveHasPlayed struct{}
+
+const removeHasPlayedCommandName = "刪除已玩"
+
+func (r *RemoveHasPlayed) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "刪除已玩",
+		Description: "刪除個人建檔的已玩資料",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+		},
+	}
 }
 
-func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+func (r *RemoveHasPlayed) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	r.HandleComponent(s, i, nil)
+}
+
+func (r *RemoveHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -27,19 +44,30 @@ func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 	userID := utils.GetUserID(i)
 
 	if cid != nil {
-		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(cid.GetCacheID())
+		if cid.GetBehaviorID() != utils.UserDataOperationBehavior {
+			utils.HandleError(kurohelpererrors.ErrCIDBehaviorMismatch, s, i)
+			return
+		}
+		userDataCID, err := cid.ToUserDataOperationCIDV2()
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
-		userRecordDataCache := cacheValue.(userRecordDataCache)
+
+		data, err := kurohelperdb.GetUserHasPlayedByUserAndGameID(kurohelperdb.Dbs, userID, userDataCID.Value)
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
 
 		// 刪除
-		kurohelperdb.DeleteUserHasPlayed(kurohelperdb.Dbs, userID, userRecordDataCache.gameID)
+		if err := kurohelperdb.DeleteUserHasPlayed(kurohelperdb.Dbs, userID, userDataCID.Value); err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
 
 		embed := &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("%s 刪除成功！", userRecordDataCache.gameName),
+			Title: fmt.Sprintf("%s 刪除成功！", data.GameErogs.Name),
 			Color: 0x7BA23F,
 		}
 		utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
@@ -56,14 +84,13 @@ func RemoveHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 			return
 		}
 
-		idStr := uuid.New().String()
-		cache.UserInfoCache.Set(idStr, userRecordDataCache{
-			gameName: data.GameErogs.Name,
-			gameID:   data.GameErogs.ID,
-		})
-
-		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDCommonComponent("✅", idStr, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{
+			discordgo.Button{
+				Label:    "✅",
+				Style:    discordgo.PrimaryButton,
+				CustomID: utils.MakeUserDataOperationCIDV2(removeHasPlayedCommandName, "", data.GameErogs.ID),
+			},
+		}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
 		embed := &discordgo.MessageEmbed{

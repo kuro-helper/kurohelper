@@ -16,12 +16,36 @@ import (
 	"kurohelperservice/provider/erogs"
 
 	"kurohelper/cache"
+	kurohelpererrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
 )
 
+type AddInWish struct{}
+
+const addInWishCommandName = "加收藏"
+
+func (a *AddInWish) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "加收藏",
+		Description: "把遊戲加到收藏(ErogameScape)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+		},
+	}
+}
+
+func (a *AddInWish) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	a.HandleComponent(s, i, nil)
+}
+
 // 加收藏Handler
-func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+func (a *AddInWish) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -30,8 +54,18 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 	})
 
 	if cid != nil {
+		if cid.GetBehaviorID() != utils.UserDataOperationBehavior {
+			utils.HandleError(kurohelpererrors.ErrCIDBehaviorMismatch, s, i)
+			return
+		}
+		userDataCID, err := cid.ToUserDataOperationCIDV2()
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
+
 		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(cid.GetCacheID())
+		cacheValue, err := cache.UserInfoCache.Get(userDataCID.CacheID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -120,8 +154,13 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 		idStr := uuid.New().String()
 		cache.UserInfoCache.Set(idStr, *res)
 
-		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDCommonComponent("✅", idStr, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{
+			discordgo.Button{
+				Label:    "✅",
+				Style:    discordgo.PrimaryButton,
+				CustomID: utils.MakeUserDataOperationCIDV2(addInWishCommandName, idStr, res.ID),
+			},
+		}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
 		image := utils.GenerateImage(i, res.BannerUrl)

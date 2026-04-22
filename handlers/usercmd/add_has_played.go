@@ -23,8 +23,41 @@ import (
 	"kurohelper/utils"
 )
 
-// 加已玩Handler
-func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+type AddHasPlayed struct{}
+
+type addHasPlayedCacheData struct {
+	Game             erogs.Game
+	CompleteDateText *string
+}
+
+const addHasPlayedCommandName = "加已玩"
+
+func (a *AddHasPlayed) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "加已玩",
+		Description: "把遊戲加到已玩(ErogameScape)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "complete_date",
+				Description: "遊玩結束日期",
+				Required:    false,
+			},
+		},
+	}
+}
+
+func (a *AddHasPlayed) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	a.HandleComponent(s, i, nil)
+}
+
+func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -33,24 +66,34 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 	})
 
 	if cid != nil {
-		addHasPlayedCID := utils.AddHasPlayedCID{
-			NewCID: *cid,
+		if cid.GetBehaviorID() != utils.UserDataOperationBehavior {
+			utils.HandleError(kurohelpererrors.ErrCIDBehaviorMismatch, s, i)
+			return
 		}
-
-		completeDate, err := addHasPlayedCID.GetCompleteDate()
+		userDataCID, err := cid.ToUserDataOperationCIDV2()
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
 
 		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(addHasPlayedCID.GetCacheID())
+		cacheValue, err := cache.UserInfoCache.Get(userDataCID.CacheID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
-		resValue := cacheValue.(erogs.Game)
-		res := &resValue
+		cacheData := cacheValue.(addHasPlayedCacheData)
+		res := &cacheData.Game
+
+		var completeDate *time.Time
+		if cacheData.CompleteDateText != nil {
+			t, err := utils.ParseYYYYMMDD(*cacheData.CompleteDateText)
+			if err != nil {
+				utils.HandleError(err, s, i)
+				return
+			}
+			completeDate = &t
+		}
 
 		userID := utils.GetUserID(i)
 		userName := utils.GetUsername(i)
@@ -129,7 +172,7 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 			}
 
 			if t.After(time.Now().AddDate(0, 0, 1)) {
-				utils.HandleError(err, s, i)
+				utils.HandleError(kurohelpererrors.ErrDateExceedsTomorrow, s, i)
 				return
 			}
 		}
@@ -151,10 +194,22 @@ func AddHasPlayed(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		}
 
 		idStr := uuid.New().String()
-		cache.UserInfoCache.Set(idStr, *res)
+		cacheData := addHasPlayedCacheData{
+			Game: *res,
+		}
+		if !t.IsZero() {
+			completeDateText := t.Format("20060102")
+			cacheData.CompleteDateText = &completeDateText
+		}
+		cache.UserInfoCache.Set(idStr, cacheData)
 
-		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDAddHasPlayedComponent("✅", idStr, t, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{
+			discordgo.Button{
+				Label:    "✅",
+				Style:    discordgo.PrimaryButton,
+				CustomID: utils.MakeUserDataOperationCIDV2(addHasPlayedCommandName, idStr, res.ID),
+			},
+		}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
 		image := utils.GenerateImage(i, res.BannerUrl)

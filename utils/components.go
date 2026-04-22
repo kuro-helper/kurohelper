@@ -16,7 +16,7 @@ var (
 	ErrMakeChangePageComponentIndexZero = errors.New("utils: make change page component page index parameters can not be zero")
 )
 
-func MakeSelectMenuComponent(gameData []SelectMenuItem, commandID, cacheID, placeholder string) *discordgo.ActionsRow {
+func MakeSelectMenuComponent(gameData []SelectMenuItem, commandName, routeKey, cacheID, placeholder string) *discordgo.ActionsRow {
 	menuOptions := []discordgo.SelectMenuOption{}
 
 	for _, gd := range gameData {
@@ -29,7 +29,7 @@ func MakeSelectMenuComponent(gameData []SelectMenuItem, commandID, cacheID, plac
 	return &discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
-				CustomID:    MakeSelectMenuCIDV2(commandID, cacheID),
+				CustomID:    MakeSelectMenuCIDV2(commandName, routeKey, cacheID),
 				Placeholder: placeholder,
 				Options:     menuOptions,
 			},
@@ -38,20 +38,20 @@ func MakeSelectMenuComponent(gameData []SelectMenuItem, commandID, cacheID, plac
 }
 
 // 製作回到主頁的Component
-func MakeBackToHomeComponent(commandID string, cacheID string) *discordgo.ActionsRow {
+func MakeBackToHomeComponent(commandName, routeKey, cacheID string) *discordgo.ActionsRow {
 	return &discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			discordgo.Button{
 				Label:    "🏠回到主頁",
 				Style:    discordgo.PrimaryButton,
-				CustomID: MakeBackToHomeCIDV2(commandID, cacheID),
+				CustomID: MakeBackToHomeCIDV2(commandName, routeKey, cacheID),
 			},
 		},
 	}
 }
 
 // 製作翻頁Component
-func MakeChangePageComponent(commandID string, currentPage int, totalPage int, cacheID string) (*discordgo.ActionsRow, error) {
+func MakeChangePageComponent(commandName, routeKey string, currentPage int, totalPage int, cacheID string) (*discordgo.ActionsRow, error) {
 	if currentPage == 0 || totalPage == 0 {
 		return nil, ErrMakeChangePageComponentIndexZero
 	}
@@ -61,7 +61,7 @@ func MakeChangePageComponent(commandID string, currentPage int, totalPage int, c
 		Label:    fmt.Sprintf("%d/%d", currentPage, totalPage),
 		Style:    discordgo.SecondaryButton,
 		Disabled: true,
-		CustomID: MakePageCIDV2(commandID, currentPage, cacheID, true),
+		CustomID: MakePageCIDV2(commandName, routeKey, currentPage, cacheID, true),
 	}
 
 	previousDisabled := false
@@ -80,7 +80,7 @@ func MakeChangePageComponent(commandID string, currentPage int, totalPage int, c
 		Label:    "◀️",
 		Style:    discordgo.SecondaryButton,
 		Disabled: previousDisabled,
-		CustomID: MakePageCIDV2(commandID, currentPage-1, cacheID, false),
+		CustomID: MakePageCIDV2(commandName, routeKey, currentPage-1, cacheID, false),
 	}
 
 	// 下一頁按鈕
@@ -88,7 +88,7 @@ func MakeChangePageComponent(commandID string, currentPage int, totalPage int, c
 		Label:    "▶️",
 		Style:    discordgo.SecondaryButton,
 		Disabled: nextDisabled,
-		CustomID: MakePageCIDV2(commandID, currentPage+1, cacheID, false),
+		CustomID: MakePageCIDV2(commandName, routeKey, currentPage+1, cacheID, false),
 	}
 
 	return &discordgo.ActionsRow{

@@ -9,8 +9,16 @@ import (
 	"kurohelperservice/provider/vndb"
 )
 
-// vndb統計資料Handler
-func VndbStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
+type VNDBStats struct{}
+
+func (v *VNDBStats) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "vndb統計資料",
+		Description: "取得VNDB統計資料",
+	}
+}
+
+func (v *VNDBStats) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	r, err := vndb.GetStats()
 	if err != nil {
 		utils.HandleError(err, s, i)

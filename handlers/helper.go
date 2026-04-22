@@ -6,7 +6,16 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func Helper(s *discordgo.Session, i *discordgo.InteractionCreate) {
+type Helper struct{}
+
+func (h *Helper) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "幫助",
+		Description: "獲取機器人相關使用教學",
+	}
+}
+
+func (h *Helper) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	embed := &discordgo.MessageEmbed{
 		Title: "幫助",
 		Color: 0xF19483,
