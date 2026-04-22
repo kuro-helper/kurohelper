@@ -17,13 +17,9 @@ func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
 		select {
 		case <-ticker.C:
 			// 清除Cache
-			slog.Info(fmt.Sprintf("%d筆SearchCache快取已被清除", SearchCache.Clean()))
-			slog.Info(fmt.Sprintf("%d筆UserInfoCache快取已被清除", UserInfoCache.Clean()))
-			// slog.Info(fmt.Sprintf("%d筆SubmitDataCache快取已被清除", SubmitDataCache.Clean()))
-			slog.Info(fmt.Sprintf("%d筆SearchBrandCache快取已被清除", SearchBrandCache.Clean()))
-
-			// 新快取(V2)
-			egsDC, egsC := CIDStore.Clean()
+			egsDC, egsC := UserInfoCache.Clean() // 混和型態快取
+			slog.Info(fmt.Sprintf("UserInfoCache          快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+			egsDC, egsC = CIDStore.Clean()
 			slog.Info(fmt.Sprintf("CIDStore               快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsGameListStore.Clean()
 			slog.Info(fmt.Sprintf("ErogsGameListStore     快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))

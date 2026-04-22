@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -23,17 +23,55 @@ import (
 )
 
 const (
-	searchBrandItemsPerPage   = 7
-	searchBrandVNDBCommandID  = "B1"
-	searchBrandErogsCommandID = "B2"
+	searchBrandItemsPerPage  = 7
+	searchBrandCommandName   = "查詢公司品牌"
+	searchBrandVNDBRouteKey  = "vndb"
+	searchBrandErogsRouteKey = "erogs"
 )
 
 var (
 	searchBrandColor = 0x00AA90
 )
 
+type SearchBrand struct{}
+
+func (sb *SearchBrand) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢公司品牌",
+		Description: "根據關鍵字查詢公司品牌資料(VNDB, 批評空間)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "查詢資料庫選項",
+				Description: "選擇查詢的資料庫",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "VNDB",
+						Value: "1",
+					},
+					{
+						Name:  "erogamescape",
+						Value: "2",
+					},
+				},
+			},
+		},
+	}
+}
+
+func (sb *SearchBrand) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sb.HandleComponent(s, i, nil)
+}
+
 // 查詢公司品牌Handler(新版API)
-func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+func (sb *SearchBrand) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		optDB, err := utils.GetOptions(i, "查詢資料庫選項")
 		if err != nil && errors.Is(err, kurohelperrerrors.ErrOptionTranslateFail) {
@@ -57,24 +95,24 @@ func SearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 		}
 	} else {
 		// 選擇不同行為的進入點
-		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
-		case switchMode{'1', utils.PageBehavior}:
+		switch (switchMode{cid.GetRouteKey(), cid.GetBehaviorID()}) {
+		case switchMode{searchBrandVNDBRouteKey, utils.PageBehavior}:
 			vndbSearchBrandWithCIDV2(s, i, cid)
-		case switchMode{'1', utils.SelectMenuBehavior}:
+		case switchMode{searchBrandVNDBRouteKey, utils.SelectMenuBehavior}:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
 			vndbSearchBrandWithSelectMenuCIDV2(s, i, cid)
-		case switchMode{'1', utils.BackToHomeBehavior}:
+		case switchMode{searchBrandVNDBRouteKey, utils.BackToHomeBehavior}:
 			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbBrandStore, buildSearchBrandComponents)
-		case switchMode{'2', utils.PageBehavior}:
+		case switchMode{searchBrandErogsRouteKey, utils.PageBehavior}:
 			erogsSearchBrandWithCIDV2(s, i, cid)
-		case switchMode{'2', utils.SelectMenuBehavior}:
+		case switchMode{searchBrandErogsRouteKey, utils.SelectMenuBehavior}:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandErogsCommandID)
-		case switchMode{'2', utils.BackToHomeBehavior}:
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandCommandName, searchBrandErogsRouteKey)
+		case switchMode{searchBrandErogsRouteKey, utils.BackToHomeBehavior}:
 			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
 				hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
 				return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
@@ -162,10 +200,10 @@ func buildSearchBrandComponents(res *vndb.ProducerSearchResponse, currentPage in
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandVNDBCommandID, cacheID, "選擇遊戲查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandCommandName, searchBrandVNDBRouteKey, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchBrandVNDBCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchBrandCommandName, searchBrandVNDBRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	} else {
@@ -416,7 +454,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		discordgo.Separator{Divider: &divider},
 		section,
 		discordgo.Separator{Divider: &divider},
-		utils.MakeBackToHomeComponent(searchBrandVNDBCommandID, selectMenuCID.CacheID),
+		utils.MakeBackToHomeComponent(searchBrandCommandName, searchBrandVNDBRouteKey, selectMenuCID.CacheID),
 	}
 
 	components := []discordgo.MessageComponent{
@@ -567,10 +605,10 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandErogsCommandID, cacheID, "選擇遊戲查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(brandMenuItems, searchBrandCommandName, searchBrandErogsRouteKey, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchBrandErogsCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchBrandCommandName, searchBrandErogsRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	} else {

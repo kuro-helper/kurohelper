@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -18,12 +18,36 @@ import (
 	"kurohelperservice/provider/erogs"
 )
 
-const searchMusicCommandID = "M2"
+const (
+	searchMusicCommandName = "查詢音樂"
+	searchMusicRouteKey    = "default"
+)
 
 var searchMusicColor = 0xF8F8DF
 
+type SearchMusic struct{}
+
+func (sm *SearchMusic) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢音樂",
+		Description: "根據關鍵字查詢音樂資料(批評空間)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+		},
+	}
+}
+
+func (sm *SearchMusic) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sm.HandleComponent(s, i, nil)
+}
+
 // 查詢音樂指令入口
-func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+func (sm *SearchMusic) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		navigator.SearchList(s, i, cache.ErogsMusicListStore, "erogs查詢音樂列表", func() ([]erogs.MusicList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
@@ -40,7 +64,7 @@ func SearchMusicV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *ut
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchMusicCommandID)
+			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchMusicCommandName, searchMusicRouteKey)
 		case utils.BackToHomeBehavior:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
 		default:
@@ -59,8 +83,8 @@ func erogsSearchMusicListWithCIDV2(s *discordgo.Session, i *discordgo.Interactio
 	navigator.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
 }
 
-// 查詢指定音樂(有CID版本)；backHomeCommandID 用於「返回」鈕對應的 command（例如從歌手詳情進入時傳 SD2）
-func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, backHomeCommandID string) {
+// 查詢指定音樂(有CID版本)；backHomeCommandName/backHomeRouteKey 用於「返回」鈕對應的路由
+func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, backHomeCommandName, backHomeRouteKey string) {
 	if cid.GetBehaviorID() != utils.SelectMenuBehavior {
 		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
 		return
@@ -192,7 +216,7 @@ func erogsSearchMusicWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inte
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(backHomeCommandID, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(backHomeCommandName, backHomeRouteKey, selectMenuCID.CacheID))
 
 	utils.InteractionRespondEditComplex(s, i, []discordgo.MessageComponent{
 		discordgo.Container{
@@ -274,10 +298,10 @@ func buildSearchMusicComponents(res []erogs.MusicList, currentPage int, cacheID 
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchMusicCommandID, cacheID, "選擇音樂查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchMusicCommandName, searchMusicRouteKey, cacheID, "選擇音樂查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchMusicCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchMusicCommandName, searchMusicRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package usercmd
+package user
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"kurohelper/cache"
+	kurohelpererrors "kurohelper/errors"
 	"kurohelper/utils"
 
 	kurohelperdb "kurohelperservice/db"
@@ -21,7 +22,22 @@ type UserInfo struct {
 	Avatar          string
 }
 
-func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+type GetUserinfo struct{}
+
+const userInfoCommandName = "個人資料"
+
+func (g *GetUserinfo) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "個人資料",
+		Description: "取得自己的個人資料",
+	}
+}
+
+func (g *GetUserinfo) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	g.HandleComponent(s, i, nil)
+}
+
+func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	// 長時間查詢
 	if cid == nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -39,12 +55,17 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 	listInWish := make([]string, 0, 10)
 
 	if cid != nil {
-		// 處理CID
-		pageCID := utils.PageCID{
-			NewCID: *cid,
+		if cid.GetBehaviorID() != utils.PageBehavior {
+			utils.HandleError(kurohelpererrors.ErrCIDBehaviorMismatch, s, i)
+			return
+		}
+		pageCID, err := cid.ToPageCIDV2()
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
 		}
 
-		cacheValue, err := cache.UserInfoCache.Get(pageCID.GetCacheID())
+		cacheValue, err := cache.UserInfoCache.Get(pageCID.CacheID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -58,11 +79,7 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 		avatar = userInfo.Avatar
 
 		// 取得資料頁
-		pageIndex, err := pageCID.GetPageIndex()
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
-		}
+		pageIndex := pageCID.Value
 
 		var hasMore bool
 		hasPlayed, tmpMore := utils.PaginationR(userInfo.HasPlayed, pageIndex, true)
@@ -75,16 +92,37 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 			hasMore = true
 		}
 
-		cidCommandName := utils.MakeCIDCommandName(cid.GetCommandName(), true, "")
 		if hasMore {
 			if pageIndex == 0 {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), 1, cidCommandName)}
+				messageComponent = []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "▶️",
+						Style:    discordgo.PrimaryButton,
+						CustomID: utils.MakePageCIDV2(userInfoCommandName, "", 1, pageCID.CacheID, false),
+					},
+				}
 			} else {
-				messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
-				messageComponent = append(messageComponent, utils.MakeCIDPageComponent("▶️", pageCID.GetCacheID(), pageIndex+1, cidCommandName))
+				messageComponent = []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "◀️",
+						Style:    discordgo.PrimaryButton,
+						CustomID: utils.MakePageCIDV2(userInfoCommandName, "", pageIndex-1, pageCID.CacheID, false),
+					},
+				}
+				messageComponent = append(messageComponent, discordgo.Button{
+					Label:    "▶️",
+					Style:    discordgo.PrimaryButton,
+					CustomID: utils.MakePageCIDV2(userInfoCommandName, "", pageIndex+1, pageCID.CacheID, false),
+				})
 			}
 		} else {
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("◀️", pageCID.GetCacheID(), pageIndex-1, cidCommandName)}
+			messageComponent = []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "◀️",
+					Style:    discordgo.PrimaryButton,
+					CustomID: utils.MakePageCIDV2(userInfoCommandName, "", pageIndex-1, pageCID.CacheID, false),
+				},
+			}
 		}
 
 		for i, hp := range hasPlayed {
@@ -163,8 +201,13 @@ func GetUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate, cid *util
 			idStr := uuid.New().String()
 			cache.UserInfoCache.Set(idStr, userInfo)
 
-			cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-			messageComponent = []discordgo.MessageComponent{utils.MakeCIDPageComponent("▶️", idStr, 1, cidCommandName)}
+			messageComponent = []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "▶️",
+					Style:    discordgo.PrimaryButton,
+					CustomID: utils.MakePageCIDV2(userInfoCommandName, "", 1, idStr, false),
+				},
+			}
 		}
 
 		for i, hp := range userHasPlayed {

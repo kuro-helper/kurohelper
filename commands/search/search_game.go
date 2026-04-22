@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -28,8 +28,9 @@ import (
 
 const (
 	searchGameListItemsPerPage = 10
-	searchGameErogsCommandID   = "G2"
-	searchGameVndbCommandID    = "G1"
+	searchGameCommandName      = "查詢遊戲"
+	searchGameErogsRouteKey    = "erogs"
+	searchGameVndbRouteKey     = "vndb"
 )
 
 var (
@@ -38,12 +39,50 @@ var (
 )
 
 type switchMode struct {
-	OptDB      byte
+	RouteKey   string
 	BehaviorID utils.BehaviorID
 }
 
+type SearchGame struct{}
+
+func (sg *SearchGame) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢遊戲",
+		Description: "根據關鍵字查詢遊戲資料(VNDB, 批評空間)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "keyword",
+				Description:  "關鍵字",
+				Autocomplete: true,
+				Required:     true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "查詢資料庫選項",
+				Description: "選擇查詢的資料庫",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "VNDB",
+						Value: "1",
+					},
+					{
+						Name:  "erogamescape",
+						Value: "2",
+					},
+				},
+			},
+		},
+	}
+}
+
+func (sg *SearchGame) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sg.HandleComponent(s, i, nil)
+}
+
 // 查詢遊戲Handler進入點
-func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		optDB, err := utils.GetOptions(i, "查詢資料庫選項")
 		if err != nil && errors.Is(err, kurohelperrerrors.ErrOptionTranslateFail) {
@@ -67,29 +106,89 @@ func SearchGameV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *uti
 		}
 	} else {
 		// 選擇不同行為的進入點
-		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
-		case switchMode{'1', utils.PageBehavior}:
+		switch (switchMode{cid.GetRouteKey(), cid.GetBehaviorID()}) {
+		case switchMode{searchGameVndbRouteKey, utils.PageBehavior}:
 			vndbSearchGameListWithCIDV2(s, i, cid)
-		case switchMode{'2', utils.PageBehavior}:
+		case switchMode{searchGameErogsRouteKey, utils.PageBehavior}:
 			erogsSearchGameListWithCIDV2(s, i, cid)
-		case switchMode{'1', utils.SelectMenuBehavior}:
+		case switchMode{searchGameVndbRouteKey, utils.SelectMenuBehavior}:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
 			vndbSearchGameWithSelectMenuCIDV2(s, i, cid)
-		case switchMode{'2', utils.SelectMenuBehavior}:
+		case switchMode{searchGameErogsRouteKey, utils.SelectMenuBehavior}:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameErogsCommandID)
-		case switchMode{'1', utils.BackToHomeBehavior}:
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameCommandName, searchGameErogsRouteKey)
+		case switchMode{searchGameVndbRouteKey, utils.BackToHomeBehavior}:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
-		case switchMode{'2', utils.BackToHomeBehavior}:
+		case switchMode{searchGameErogsRouteKey, utils.BackToHomeBehavior}:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, buildSearchGameComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
+}
+
+func (sg *SearchGame) Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+
+	// 找出目前使用者正在打字的那個選項
+	var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+	for _, opt := range data.Options {
+		if opt.Focused {
+			focusedOption = opt
+			break
+		}
+	}
+
+	if focusedOption == nil {
+		return
+	}
+
+	// 取得目前輸入的文字
+	userInput := focusedOption.StringValue()
+	userInput = strings.ToLower(userInput)
+	queryRunes := []rune(userInput)
+
+	if len(queryRunes) < 2 {
+		return
+	}
+
+	var choices []*discordgo.ApplicationCommandOptionChoice
+	if len(erogs.GamesName) == 0 {
+		slog.Warn("ErogsGameAutoComplete has not been initialized...")
+		return
+	}
+
+	targetIndices, ok := erogs.InvertedIndex[queryRunes[0]]
+	if !ok {
+		return
+	}
+
+	limit := 15
+
+	for _, idx := range targetIndices {
+		name := erogs.GamesName[idx]
+		if strings.Contains(strings.ToLower(name), userInput) {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  name,
+				Value: name,
+			})
+		}
+
+		if len(choices) >= limit {
+			break
+		}
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }
 
 // 查詢遊戲列表
@@ -124,7 +223,7 @@ func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 }
 
 // 查詢單一遊戲資料(有CID版本，從選單選擇)
-func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, cidNamePrefix string) {
+func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2, backToHomeCommandName, backToHomeRouteKey string) {
 	if cid.GetBehaviorID() != utils.SelectMenuBehavior {
 		utils.HandleErrorV2(errors.New("handlers: cid behavior id error"), s, i, utils.InteractionRespondEditComplex)
 		return
@@ -418,7 +517,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(cidNamePrefix, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(backToHomeCommandName, backToHomeRouteKey, selectMenuCID.CacheID))
 
 	components := []discordgo.MessageComponent{
 		discordgo.Container{
@@ -490,10 +589,10 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameErogsCommandID, cacheID, "選擇遊戲查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameCommandName, searchGameErogsRouteKey, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchGameErogsCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchGameCommandName, searchGameErogsRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}
@@ -785,7 +884,7 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 		discordgo.Separator{Divider: &divider},
 	}
 
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchGameVndbCommandID, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchGameCommandName, searchGameVndbRouteKey, selectMenuCID.CacheID))
 
 	components := []discordgo.MessageComponent{
 		discordgo.Container{
@@ -874,10 +973,10 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 	}
 
 	// 產生選單組件
-	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameVndbCommandID, cacheID, "選擇遊戲查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchGameCommandName, searchGameVndbRouteKey, cacheID, "選擇遊戲查看詳細")
 
 	// 產生翻頁組件
-	pageComponents, err := utils.MakeChangePageComponent(searchGameVndbCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchGameCommandName, searchGameVndbRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}
@@ -895,64 +994,4 @@ func buildVndbSearchGameComponents(res []vndb.GetVnIDUseListResponse, currentPag
 			Components:  containerComponents,
 		},
 	}, nil
-}
-
-func HandleGameAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	data := i.ApplicationCommandData()
-
-	// 找出目前使用者正在打字的那個選項
-	var focusedOption *discordgo.ApplicationCommandInteractionDataOption
-	for _, opt := range data.Options {
-		if opt.Focused {
-			focusedOption = opt
-			break
-		}
-	}
-
-	if focusedOption == nil {
-		return
-	}
-
-	// 取得目前輸入的文字
-	userInput := focusedOption.StringValue()
-	userInput = strings.ToLower(userInput)
-	queryRunes := []rune(userInput)
-
-	if len(queryRunes) < 2 {
-		return
-	}
-
-	var choices []*discordgo.ApplicationCommandOptionChoice
-	if len(erogs.GamesName) == 0 {
-		slog.Warn("ErogsGameAutoComplete has not been initialized...")
-		return
-	}
-
-	targetIndices, ok := erogs.InvertedIndex[queryRunes[0]]
-	if !ok {
-		return
-	}
-
-	limit := 15
-
-	for _, idx := range targetIndices {
-		name := erogs.GamesName[idx]
-		if strings.Contains(strings.ToLower(name), userInput) {
-			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-				Name:  name,
-				Value: name,
-			})
-		}
-
-		if len(choices) >= limit {
-			break
-		}
-	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
-		Data: &discordgo.InteractionResponseData{
-			Choices: choices,
-		},
-	})
 }

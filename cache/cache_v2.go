@@ -59,6 +59,9 @@ var (
 	BangumiCharacterStore = NewCacheStoreV2[*bangumi.Character](2 * time.Hour)
 )
 
+// 使用者相關快取(混合資料型態)
+var UserInfoCache = NewCacheStoreV2[any](10 * time.Minute)
+
 // 月幕快取
 // var (
 // 	YmgalGame = NewCacheStoreV2[*ymgal.SearchGameResp](time.Hour)
@@ -126,19 +129,6 @@ func (c *CacheStoreV2[T]) Clean() (deleteCount int, total int) {
 			delete(c.data, k)
 			deleteCount++
 		}
-	}
-
-	return
-}
-
-// CleanAll 清除所有快取
-func (c *CacheStoreV2[T]) CleanAll() (count int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for k := range c.data {
-		delete(c.data, k)
-		count++
 	}
 
 	return

@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"encoding/base64"
@@ -22,11 +22,54 @@ import (
 )
 
 const (
-	searchCharacterListItemsPerPage  = 10
-	searchCharacterListVNDBCommandID = "H1"
+	searchCharacterListItemsPerPage = 10
+	searchCharacterCommandName      = "查詢角色"
+	searchCharacterVNDBRouteKey     = "vndb"
 )
 
-func SearchCharacterV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+type SearchCharacter struct{}
+
+func (sc *SearchCharacter) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢角色",
+		Description: "根據關鍵字查詢角色資料(VNDB, Bangumi)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "查詢資料庫選項",
+				Description: "選擇查詢的資料庫",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "VNDB",
+						Value: "1",
+					},
+					// 資料庫資料太少且不齊全，所以暫停使用
+					// {
+					// 	Name:  "erogamescape",
+					// 	Value: "2",
+					// },
+					{
+						Name:  "Bangumi",
+						Value: "3",
+					},
+				},
+			},
+		},
+	}
+}
+
+func (sc *SearchCharacter) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sc.HandleComponent(s, i, nil)
+}
+
+func (sc *SearchCharacter) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		optDB, err := utils.GetOptions(i, "查詢資料庫選項")
 		if err != nil && errors.Is(err, kurohelperrerrors.ErrOptionTranslateFail) {
@@ -44,15 +87,15 @@ func SearchCharacterV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid
 		}
 	} else {
 		// 選擇不同行為的進入點
-		switch (switchMode{cid.GetCommandID()[1], cid.GetBehaviorID()}) {
-		case switchMode{'1', utils.PageBehavior}:
+		switch (switchMode{cid.GetRouteKey(), cid.GetBehaviorID()}) {
+		case switchMode{searchCharacterVNDBRouteKey, utils.PageBehavior}:
 			vndbSearchCharacterWithCIDV2(s, i, cid)
-		case switchMode{'1', utils.SelectMenuBehavior}:
+		case switchMode{searchCharacterVNDBRouteKey, utils.SelectMenuBehavior}:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
 			vndbSearchCharacterWithSelectMenuCIDV2(s, i, cid)
-		case switchMode{'1', utils.BackToHomeBehavior}:
+		case switchMode{searchCharacterVNDBRouteKey, utils.BackToHomeBehavior}:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbCharacterListStore, buildSearchCharacterComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
@@ -146,14 +189,14 @@ func buildSearchCharacterComponents(res []vndb.CharacterSearchResponse, currentP
 		menuItems = append(menuItems, utils.SelectMenuItem{Title: nameData, ID: r.ID})
 	}
 
-	pageComponents, err := utils.MakeChangePageComponent(searchCharacterListVNDBCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchCharacterCommandName, searchCharacterVNDBRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}
 
 	containerComponents = append(containerComponents,
 		discordgo.Separator{Divider: &divider},
-		utils.MakeSelectMenuComponent(menuItems, searchCharacterListVNDBCommandID, cacheID, "選擇角色查看詳情"),
+		utils.MakeSelectMenuComponent(menuItems, searchCharacterCommandName, searchCharacterVNDBRouteKey, cacheID, "選擇角色查看詳情"),
 		pageComponents,
 	)
 
@@ -346,7 +389,7 @@ func vndbSearchCharacterWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.I
 		section,
 		discordgo.Separator{Divider: &divider},
 	}
-	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchCharacterListVNDBCommandID, selectMenuCID.CacheID))
+	containerComponents = append(containerComponents, utils.MakeBackToHomeComponent(searchCharacterCommandName, searchCharacterVNDBRouteKey, selectMenuCID.CacheID))
 
 	components := []discordgo.MessageComponent{
 		discordgo.Container{

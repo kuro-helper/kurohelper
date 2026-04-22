@@ -1,4 +1,4 @@
-package searchcmd
+package search
 
 import (
 	"errors"
@@ -21,16 +21,38 @@ import (
 )
 
 const (
-	searchCreatorListItemsPerPage    = 10
-	searchCreatorItemsPerPage        = 7
-	searchCreatorListCommandID       = "C2"
-	searchCreatorDetailCommandID     = "CD2"
-	searchCreatorGameSelectCommandID = "CG2" // 從創作者詳情選遊戲跳轉，回到上一頁用 CD2
+	searchCreatorListItemsPerPage   = 10
+	searchCreatorItemsPerPage       = 7
+	searchCreatorCommandName        = "查詢創作者"
+	searchCreatorListRouteKey       = "list"
+	searchCreatorDetailRouteKey     = "detail"
+	searchCreatorGameSelectRouteKey = "game_select" // 從創作者詳情選遊戲跳轉，回到上一頁用 detail
 )
 
 var searchCreatorColor = 0xF8F8DF
 
-func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
+type SearchCreator struct{}
+
+func (sc *SearchCreator) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "查詢創作者",
+		Description: "根據關鍵字查詢創作者資料(批評空間)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+		},
+	}
+}
+
+func (sc *SearchCreator) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sc.HandleComponent(s, i, nil)
+}
+
+func (sc *SearchCreator) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
 		navigator.SearchList(s, i, cache.ErogsCreatorListStore, "erogs查詢創作者列表", func() ([]erogs.CreatorList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
@@ -40,17 +62,17 @@ func SearchCreatorV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *
 			return erogs.SearchCreatorListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 		}, buildSearchCreatorListComponents)
 	} else {
-		cmdID, behaviorID := cid.GetCommandID(), cid.GetBehaviorID()
+		routeKey, behaviorID := cid.GetRouteKey(), cid.GetBehaviorID()
 		switch {
-		case cmdID == searchCreatorGameSelectCommandID && behaviorID == utils.SelectMenuBehavior:
+		case routeKey == searchCreatorGameSelectRouteKey && behaviorID == utils.SelectMenuBehavior:
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseDeferredMessageUpdate,
 			})
-			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchCreatorDetailCommandID)
-		case cmdID == searchCreatorDetailCommandID && behaviorID == utils.BackToHomeBehavior:
+			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchCreatorCommandName, searchCreatorDetailRouteKey)
+		case routeKey == searchCreatorDetailRouteKey && behaviorID == utils.BackToHomeBehavior:
 			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
 		case behaviorID == utils.PageBehavior:
-			if cmdID == searchCreatorDetailCommandID {
+			if routeKey == searchCreatorDetailRouteKey {
 				erogsSearchCreatorDetailWithCIDV2(s, i, cid)
 			} else {
 				erogsSearchCreatorListWithCIDV2(s, i, cid)
@@ -224,11 +246,11 @@ func buildSearchCreatorDetailComponents(res *erogs.Creator, currentPage int, pag
 	}
 
 	// 與 search_game_v2 相同：選單選擇遊戲可跳轉遊戲詳情，並可回到上一頁（創作者詳情）
-	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchCreatorGameSelectCommandID, pageCacheID, "選擇遊戲查看詳細")
+	selectMenuComponents := utils.MakeSelectMenuComponent(gameMenuItems, searchCreatorCommandName, searchCreatorGameSelectRouteKey, pageCacheID, "選擇遊戲查看詳細")
 	containerComponents = append(containerComponents, discordgo.Separator{Divider: &divider}, selectMenuComponents)
 
 	if totalItems > searchCreatorItemsPerPage {
-		pageComponents, err := utils.MakeChangePageComponent(searchCreatorDetailCommandID, currentPage, totalPages, pageCacheID)
+		pageComponents, err := utils.MakeChangePageComponent(searchCreatorCommandName, searchCreatorDetailRouteKey, currentPage, totalPages, pageCacheID)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +300,7 @@ func buildSearchCreatorListComponents(res []erogs.CreatorList, currentPage int, 
 			Accessory: discordgo.Button{
 				Label:    "查看詳情",
 				Style:    discordgo.PrimaryButton,
-				CustomID: utils.MakeDetailBtnCIDV2(searchCreatorListCommandID, cacheID, "e"+strconv.Itoa(r.ID)),
+				CustomID: utils.MakeDetailBtnCIDV2(searchCreatorCommandName, searchCreatorListRouteKey, cacheID, "e"+strconv.Itoa(r.ID)),
 			},
 		})
 		creatorMenuItems = append(creatorMenuItems, utils.SelectMenuItem{
@@ -286,7 +308,7 @@ func buildSearchCreatorListComponents(res []erogs.CreatorList, currentPage int, 
 			ID:    "e" + strconv.Itoa(r.ID),
 		})
 	}
-	pageComponents, err := utils.MakeChangePageComponent(searchCreatorListCommandID, currentPage, totalPages, cacheID)
+	pageComponents, err := utils.MakeChangePageComponent(searchCreatorCommandName, searchCreatorListRouteKey, currentPage, totalPages, cacheID)
 	if err != nil {
 		return nil, err
 	}

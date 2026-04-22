@@ -1,10 +1,12 @@
-package usercmd
+package user
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -16,12 +18,46 @@ import (
 	"kurohelperservice/provider/erogs"
 
 	"kurohelper/cache"
+	kurohelpererrors "kurohelper/errors"
 	"kurohelper/store"
 	"kurohelper/utils"
 )
 
-// 加收藏Handler
-func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.NewCID) {
+type AddHasPlayed struct{}
+
+type addHasPlayedCacheData struct {
+	Game             erogs.Game
+	CompleteDateText *string
+}
+
+const addHasPlayedCommandName = "加已玩"
+
+func (a *AddHasPlayed) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "加已玩",
+		Description: "把遊戲加到已玩(ErogameScape)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "keyword",
+				Description: "關鍵字",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "complete_date",
+				Description: "遊玩結束日期",
+				Required:    false,
+			},
+		},
+	}
+}
+
+func (a *AddHasPlayed) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	a.HandleComponent(s, i, nil)
+}
+
+func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -30,14 +66,34 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 	})
 
 	if cid != nil {
-		// get cache
-		cacheValue, err := cache.UserInfoCache.Get(cid.GetCacheID())
+		if cid.GetBehaviorID() != utils.UserDataOperationBehavior {
+			utils.HandleError(kurohelpererrors.ErrCIDBehaviorMismatch, s, i)
+			return
+		}
+		userDataCID, err := cid.ToUserDataOperationCIDV2()
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
-		resValue := cacheValue.(erogs.Game)
-		res := &resValue
+
+		// get cache
+		cacheValue, err := cache.UserInfoCache.Get(userDataCID.CacheID)
+		if err != nil {
+			utils.HandleError(err, s, i)
+			return
+		}
+		cacheData := cacheValue.(addHasPlayedCacheData)
+		res := &cacheData.Game
+
+		var completeDate *time.Time
+		if cacheData.CompleteDateText != nil {
+			t, err := utils.ParseYYYYMMDD(*cacheData.CompleteDateText)
+			if err != nil {
+				utils.HandleError(err, s, i)
+				return
+			}
+			completeDate = &t
+		}
 
 		userID := utils.GetUserID(i)
 		userName := utils.GetUsername(i)
@@ -64,7 +120,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 				}
 
 				// 4. 建立資料
-				if err := kurohelperdb.CreateUserInWish(tx, userID, res.ID); err != nil {
+				if err := kurohelperdb.CreateUserHasPlayed(tx, userID, res.ID, completeDate); err != nil {
 					return err
 				}
 
@@ -82,13 +138,13 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 
 			embed := &discordgo.MessageEmbed{
 				Title: "加入成功！",
-				Color: 0x90B44B,
+				Color: 0x7BA23F,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		} else { // 找不到使用者，此狀況應該會是Discord官方問題或是程式碼邏輯問題
 			embed := &discordgo.MessageEmbed{
 				Title: "找不到使用者！",
-				Color: 0x90B44B,
+				Color: 0x7BA23F,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
 		}
@@ -99,6 +155,26 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
+		}
+
+		completeDate, err := utils.GetOptions(i, "complete_date")
+		if err != nil && !errors.Is(err, kurohelpererrors.ErrOptionNotFound) {
+			utils.HandleError(err, s, i)
+			return
+		}
+
+		var t time.Time
+		if completeDate != "" {
+			t, err = utils.ParseYYYYMMDD(completeDate)
+			if err != nil {
+				utils.HandleError(err, s, i)
+				return
+			}
+
+			if t.After(time.Now().AddDate(0, 0, 1)) {
+				utils.HandleError(kurohelpererrors.ErrDateExceedsTomorrow, s, i)
+				return
+			}
 		}
 
 		idSearch, _ := regexp.MatchString(`^e\d+$`, keyword)
@@ -118,10 +194,22 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 		}
 
 		idStr := uuid.New().String()
-		cache.UserInfoCache.Set(idStr, *res)
+		cacheData := addHasPlayedCacheData{
+			Game: *res,
+		}
+		if !t.IsZero() {
+			completeDateText := t.Format("20060102")
+			cacheData.CompleteDateText = &completeDateText
+		}
+		cache.UserInfoCache.Set(idStr, cacheData)
 
-		cidCommandName := utils.MakeCIDCommandName(i.ApplicationCommandData().Name, false, "")
-		messageComponent := []discordgo.MessageComponent{utils.MakeCIDCommonComponent("✅", idStr, cidCommandName)}
+		messageComponent := []discordgo.MessageComponent{
+			discordgo.Button{
+				Label:    "✅",
+				Style:    discordgo.PrimaryButton,
+				CustomID: utils.MakeUserDataOperationCIDV2(addHasPlayedCommandName, idStr, res.ID),
+			},
+		}
 		actionsRow := utils.MakeActionsRow(messageComponent)
 
 		image := utils.GenerateImage(i, res.BannerUrl)
@@ -132,7 +220,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 			},
 			Title: fmt.Sprintf("**%s(%s)**", res.Gamename, res.SellDay),
 			URL:   res.Shoukai,
-			Color: 0x90B44B,
+			Color: 0x7BA23F,
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "發行機種",
@@ -141,7 +229,7 @@ func AddInWish(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.
 				},
 				{
 					Name:   "確認",
-					Value:  "你確定要加入收藏嗎?",
+					Value:  "你確定要加入已玩嗎?",
 					Inline: false,
 				},
 			},

@@ -1,4 +1,4 @@
-package randomcmd
+package random
 
 import (
 	"errors"
@@ -16,8 +16,35 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+type RandomGame struct{}
+
+func (r *RandomGame) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "隨機遊戲",
+		Description: "隨機一部Galgame",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "查詢資料庫選項",
+				Description: "選擇查詢的資料庫",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "VNDB",
+						Value: "1",
+					},
+					{
+						Name:  "ymgal",
+						Value: "2",
+					},
+				},
+			},
+		},
+	}
+}
+
 // 隨機遊戲Handler
-func RandomGame(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (r *RandomGame) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// 長時間查詢
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,

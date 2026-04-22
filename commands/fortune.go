@@ -1,4 +1,4 @@
-package handlers
+package commands
 
 import (
 	"fmt"
@@ -30,7 +30,16 @@ var fortunes = []fortuneResult{
 	{"大凶", "今日宜低調行事，凡事三思而後行！", 2, 0x1A1A1D},   // Black
 }
 
-func Fortune(s *discordgo.Session, i *discordgo.InteractionCreate) {
+type Fortune struct{}
+
+func (f *Fortune) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "運勢",
+		Description: "抽抽今天的運勢",
+	}
+}
+
+func (f *Fortune) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Use time to seed the random number generator to ensure stability
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := rng.Intn(100)

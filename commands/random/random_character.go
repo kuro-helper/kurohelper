@@ -1,4 +1,4 @@
-package randomcmd
+package random
 
 import (
 	"errors"
@@ -15,8 +15,34 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// 隨機角色Handler
-func RandomCharacter(s *discordgo.Session, i *discordgo.InteractionCreate) {
+type RandomCharacter struct{}
+
+func (r *RandomCharacter) Definition() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "隨機角色",
+		Description: "隨機一個Galgame角色(VNDB)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "隨機角色的身分",
+				Description: "選擇隨機角色的身分",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "主角",
+						Value: "1",
+					},
+					{
+						Name:  "配角",
+						Value: "2",
+					},
+				},
+			},
+		},
+	}
+}
+
+func (r *RandomCharacter) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// 長時間查詢
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,

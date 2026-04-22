@@ -1,95 +1,98 @@
 package bot
 
 import (
-	"strings"
+	"fmt"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 
+	"kurohelper/commands"
+	"kurohelper/commands/random"
+	"kurohelper/commands/search"
+	"kurohelper/commands/user"
+	"kurohelper/commands/vndb"
 	kurohelpererrors "kurohelper/errors"
-	"kurohelper/handlers"
-	"kurohelper/handlers/randomcmd"
-	"kurohelper/handlers/searchcmd"
-	"kurohelper/handlers/usercmd"
-	"kurohelper/handlers/vndbcmd"
 	"kurohelper/utils"
 )
 
+type SlashCommand interface {
+	Definition() *discordgo.ApplicationCommand
+	Handler(s *discordgo.Session, i *discordgo.InteractionCreate)
+}
+
+// 使用新版CID的介面
+type ComponentV2Handler interface {
+	HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2)
+}
+
+// 選擇性介面：只有需要自動補完的指令才實作此方法
+type Autocompleter interface {
+	Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate)
+}
+
+// 要使用的指令
+var commandMap = map[string]SlashCommand{
+	// 主要專用指令
+	"查詢遊戲":   &search.SearchGame{},
+	"查詢公司品牌": &search.SearchBrand{},
+	"查詢創作者":  &search.SearchCreator{},
+	"查詢角色":   &search.SearchCharacter{},
+	"查詢音樂":   &search.SearchMusic{},
+	"查詢歌手":   &search.SearchSinger{},
+	// 隨機相關指令
+	"隨機遊戲": &random.RandomGame{},
+	"隨機角色": &random.RandomCharacter{},
+	// 使用者相關指令
+	"個人資料": &user.GetUserinfo{},
+	"加已玩":  &user.AddHasPlayed{},
+	"加收藏":  &user.AddInWish{},
+	"刪除已玩": &user.RemoveHasPlayed{},
+	"刪除收藏": &user.RemoveInWish{},
+	// vndb專用指令
+	"vndb統計資料": &vndb.VNDBStats{},
+	// 未分類指令
+	"運勢": &commands.Fortune{},
+	"幫助": &commands.Helper{},
+}
+
+// 註冊命令
+func RegisterCommand(s *discordgo.Session) {
+	for n, cmd := range commandMap {
+		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd.Definition())
+		if err != nil {
+			slog.Error(fmt.Sprintf("register %s command failed: %s", n, err.Error()))
+		}
+	}
+}
+
+func GetSlashCommand(name string) SlashCommand {
+	cmd, ok := commandMap[name]
+	if !ok {
+		return nil
+	}
+
+	return cmd
+}
+
 func OnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
+	// 一般事件
 	case discordgo.InteractionApplicationCommand:
-		onInteractionApplicationCommand(s, i)
-	case discordgo.InteractionMessageComponent:
-		onInteractionMessageComponent(s, i)
-	case discordgo.InteractionApplicationCommandAutocomplete:
-		onInteractionAutocomplete(s, i)
-	}
-}
-
-func onInteractionAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	data := i.ApplicationCommandData()
-	switch data.Name {
-	case "查詢遊戲":
-		go searchcmd.HandleGameAutocomplete(s, i)
-	}
-}
-
-// 事件是InteractionApplicationCommand(使用斜線命令)的處理
-func onInteractionApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	switch i.ApplicationCommandData().Name {
-	case "幫助":
-		go handlers.Helper(s, i)
-	case "運勢":
-		go handlers.Fortune(s, i)
-	case "vndb統計資料":
-		go vndbcmd.VndbStats(s, i)
-	case "查詢遊戲":
-		go searchcmd.SearchGameV2(s, i, nil)
-	case "查詢公司品牌":
-		go searchcmd.SearchBrandV2(s, i, nil)
-	case "查詢創作者":
-		go searchcmd.SearchCreatorV2(s, i, nil)
-	case "查詢音樂":
-		go searchcmd.SearchMusicV2(s, i, nil)
-	case "查詢角色":
-		go searchcmd.SearchCharacterV2(s, i, nil)
-	case "查詢歌手":
-		go searchcmd.SearchSinger(s, i, nil)
-	case "加已玩":
-		go usercmd.AddHasPlayed(s, i, nil)
-	case "加收藏":
-		go usercmd.AddInWish(s, i, nil)
-	case "隨機角色":
-		go randomcmd.RandomCharacter(s, i)
-	case "隨機遊戲":
-		go randomcmd.RandomGame(s, i)
-	case "個人資料":
-		go usercmd.GetUserinfo(s, i, nil)
-	case "刪除已玩":
-		go usercmd.RemoveHasPlayed(s, i, nil)
-	case "刪除收藏":
-		go usercmd.RemoveInWish(s, i, nil)
-	}
-}
-
-// 事件是InteractionMessageComponent(點擊按鈕)的處理
-func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cidStringSlice := strings.Split(i.MessageComponentData().CustomID, "|")
-	// 舊版CID，其餘當成新版CID(V2)去嘗試解析
-	if len(cidStringSlice) > 1 {
-		cid := utils.NewCID(cidStringSlice)
-		switch cid.GetCommandName() {
-		case "加已玩":
-			go usercmd.AddHasPlayed(s, i, &cid)
-		case "加收藏":
-			go usercmd.AddInWish(s, i, &cid)
-		case "個人資料":
-			go usercmd.GetUserinfo(s, i, &cid)
-		case "刪除已玩":
-			go usercmd.RemoveHasPlayed(s, i, &cid)
-		case "刪除收藏":
-			go usercmd.RemoveInWish(s, i, &cid)
+		if cmd := GetSlashCommand(i.ApplicationCommandData().Name); cmd != nil {
+			go cmd.Handler(s, i)
 		}
-	} else { // 新版CID(V2)
+	// Autocomplete
+	case discordgo.InteractionApplicationCommandAutocomplete:
+		if cmd := GetSlashCommand(i.ApplicationCommandData().Name); cmd != nil {
+			if auto, ok := cmd.(Autocompleter); ok {
+				go auto.Autocomplete(s, i)
+			} else {
+				slog.Warn(i.ApplicationCommandData().Name + " 沒有實作Autocomplete")
+				return
+			}
+		}
+
+	case discordgo.InteractionMessageComponent:
 		cid, err := utils.ParseCIDV2(i.MessageComponentData().CustomID)
 		if err != nil {
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
@@ -101,28 +104,26 @@ func onInteractionMessageComponent(s *discordgo.Session, i *discordgo.Interactio
 			cid.ChangeValue(i.MessageComponentData().Values[0])
 		}
 
-		commandID := cid.GetCommandID()
-		// CID不合法(commandID的部分)
-		if len(commandID) < 2 || len(commandID) > 3 {
+		commandName := cid.GetCommandName()
+		if commandName == "" {
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return
 		}
-		switch commandID[0] {
-		case 'G':
-			go searchcmd.SearchGameV2(s, i, cid)
-		case 'B':
-			go searchcmd.SearchBrandV2(s, i, cid)
-		case 'M':
-			go searchcmd.SearchMusicV2(s, i, cid)
-		case 'C':
-			go searchcmd.SearchCreatorV2(s, i, cid)
-		case 'H':
-			go searchcmd.SearchCharacterV2(s, i, cid)
-		case 'S':
-			go searchcmd.SearchSinger(s, i, cid)
-		default:
-			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
+
+		cmd := GetSlashCommand(commandName)
+		if cmd == nil {
+			slog.Warn(commandName + " 沒有註冊SlashCommand")
 			return
 		}
+
+		v2cmd, ok := cmd.(ComponentV2Handler)
+		if !ok {
+			slog.Warn(commandName + " 沒有實作ComponentV2Handler")
+			return
+		}
+
+		go v2cmd.HandleComponent(s, i, cid)
+	default:
+		return
 	}
 }
