@@ -1,4 +1,4 @@
-package navigator
+package executor
 
 import (
 	"encoding/base64"
