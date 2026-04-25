@@ -7,8 +7,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"kurohelper/bootstrap"
-	"kurohelper/bot"
+	"kurohelper/internal/bootstrap"
+	"kurohelper/internal/bot"
 )
 
 func main() {
