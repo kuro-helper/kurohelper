@@ -10,7 +10,8 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	common "kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
+	common "kurohelper/internal/executor"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 	"kurohelperservice"
@@ -41,10 +42,11 @@ func (sb *SearchBrand) Definition() *discordgo.ApplicationCommand {
 		Description: "根據關鍵字查詢公司品牌資料(VNDB, 批評空間)",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "keyword",
-				Description: "關鍵字",
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "keyword",
+				Description:  "關鍵字",
+				Autocomplete: true,
+				Required:     true,
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -122,6 +124,21 @@ func (sb *SearchBrand) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 			return
 		}
 	}
+}
+
+func (sb *SearchBrand) Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	choices, err := executor.GetAutocomplete(s, i, erogs.BrandsName, erogs.BrandInvertedIndex)
+	if err != nil {
+		slog.Warn(err.Error())
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }
 
 // vndbSearchBrandWithCIDV2 查詢公司品牌(有CID版本)，目前只有翻頁事件

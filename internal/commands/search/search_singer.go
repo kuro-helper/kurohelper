@@ -13,7 +13,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	"kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/utils"
 	"kurohelperservice"
 
@@ -54,7 +54,7 @@ func (ss *SearchSinger) Handler(s *discordgo.Session, i *discordgo.InteractionCr
 
 func (ss *SearchSinger) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		navigator.SearchList(s, i, cache.ErogsSingerListStore, "erogs查詢歌手列表", func() ([]erogs.CreatorList, error) {
+		executor.SearchList(s, i, cache.ErogsSingerListStore, "erogs查詢歌手列表", func() ([]erogs.CreatorList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
 			if err != nil {
 				return nil, err
@@ -70,7 +70,7 @@ func (ss *SearchSinger) HandleComponent(s *discordgo.Session, i *discordgo.Inter
 			})
 			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchSingerCommandName, searchSingerDetailRouteKey)
 		case routeKey == searchSingerDetailRouteKey && behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsSingerStore, buildSearchSingerDetailComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsSingerStore, buildSearchSingerDetailComponents)
 		case behaviorID == utils.PageBehavior:
 			if routeKey == searchSingerDetailRouteKey {
 				erogsSearchSingerDetailWithCIDV2(s, i, cid)
@@ -83,7 +83,7 @@ func (ss *SearchSinger) HandleComponent(s *discordgo.Session, i *discordgo.Inter
 			})
 			erogsSearchSingerWithSelectMenuCIDV2(s, i, cid)
 		case behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsSingerListStore, buildSearchSingerListComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsSingerListStore, buildSearchSingerListComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
@@ -96,7 +96,7 @@ func erogsSearchSingerListWithCIDV2(s *discordgo.Session, i *discordgo.Interacti
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsSingerListStore, buildSearchSingerListComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsSingerListStore, buildSearchSingerListComponents)
 }
 
 func erogsSearchSingerDetailWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
@@ -105,7 +105,7 @@ func erogsSearchSingerDetailWithCIDV2(s *discordgo.Session, i *discordgo.Interac
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsSingerStore, buildSearchSingerDetailComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsSingerStore, buildSearchSingerDetailComponents)
 }
 
 func erogsSearchSingerWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {

@@ -3,6 +3,7 @@ package user
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelpererrors "kurohelper/internal/errors"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 )
@@ -38,10 +40,11 @@ func (a *AddHasPlayed) Definition() *discordgo.ApplicationCommand {
 		Description: "把遊戲加到已玩(ErogameScape)",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "keyword",
-				Description: "關鍵字",
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "keyword",
+				Description:  "關鍵字",
+				Autocomplete: true,
+				Required:     true,
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -237,4 +240,19 @@ func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 		}
 		utils.InteractionEmbedRespondForSelf(s, i, embed, actionsRow, true)
 	}
+}
+
+func (a *AddHasPlayed) Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	choices, err := executor.GetAutocomplete(s, i, erogs.GamesName, erogs.GameInvertedIndex)
+	if err != nil {
+		slog.Warn(err.Error())
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }

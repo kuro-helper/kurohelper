@@ -13,7 +13,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	"kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/utils"
 	"kurohelperservice"
 
@@ -54,7 +54,7 @@ func (sc *SearchCreator) Handler(s *discordgo.Session, i *discordgo.InteractionC
 
 func (sc *SearchCreator) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		navigator.SearchList(s, i, cache.ErogsCreatorListStore, "erogs查詢創作者列表", func() ([]erogs.CreatorList, error) {
+		executor.SearchList(s, i, cache.ErogsCreatorListStore, "erogs查詢創作者列表", func() ([]erogs.CreatorList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
 			if err != nil {
 				return nil, err
@@ -70,7 +70,7 @@ func (sc *SearchCreator) HandleComponent(s *discordgo.Session, i *discordgo.Inte
 			})
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchCreatorCommandName, searchCreatorDetailRouteKey)
 		case routeKey == searchCreatorDetailRouteKey && behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
 		case behaviorID == utils.PageBehavior:
 			if routeKey == searchCreatorDetailRouteKey {
 				erogsSearchCreatorDetailWithCIDV2(s, i, cid)
@@ -83,7 +83,7 @@ func (sc *SearchCreator) HandleComponent(s *discordgo.Session, i *discordgo.Inte
 			})
 			erogsSearchCreatorWithSelectMenuCIDV2(s, i, cid)
 		case behaviorID == utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
@@ -97,7 +97,7 @@ func erogsSearchCreatorListWithCIDV2(s *discordgo.Session, i *discordgo.Interact
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsCreatorListStore, buildSearchCreatorListComponents)
 }
 
 // erogsSearchCreatorDetailWithCIDV2 創作者詳情歷代作品翻頁（僅詳情，與列表完全無關）
@@ -107,7 +107,7 @@ func erogsSearchCreatorDetailWithCIDV2(s *discordgo.Session, i *discordgo.Intera
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsCreatorStore, buildSearchCreatorDetailComponents)
 }
 
 // erogsSearchCreatorWithSelectMenuCIDV2 以 CID 的 value 作為查詢 id 顯示創作者詳情（選單或按鈕「查看詳情」進入，統一取 cid value）

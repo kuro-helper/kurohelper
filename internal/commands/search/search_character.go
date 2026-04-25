@@ -13,7 +13,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	"kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 	"kurohelperservice"
@@ -96,7 +96,7 @@ func (sc *SearchCharacter) HandleComponent(s *discordgo.Session, i *discordgo.In
 			})
 			vndbSearchCharacterWithSelectMenuCIDV2(s, i, cid)
 		case switchMode{searchCharacterVNDBRouteKey, utils.BackToHomeBehavior}:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbCharacterListStore, buildSearchCharacterComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbCharacterListStore, buildSearchCharacterComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
@@ -104,7 +104,7 @@ func (sc *SearchCharacter) HandleComponent(s *discordgo.Session, i *discordgo.In
 }
 
 func vndbSearchCharacterV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	navigator.SearchList(s, i, cache.VndbCharacterListStore, "vndb查詢角色列表", func() ([]vndb.CharacterSearchResponse, error) {
+	executor.SearchList(s, i, cache.VndbCharacterListStore, "vndb查詢角色列表", func() ([]vndb.CharacterSearchResponse, error) {
 		keyword, err := utils.GetOptions(i, "keyword")
 		if err != nil {
 			return nil, err
@@ -215,7 +215,7 @@ func vndbSearchCharacterWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.VndbCharacterListStore, buildSearchCharacterComponents)
+	executor.ChangePage(s, i, pageCID, cache.VndbCharacterListStore, buildSearchCharacterComponents)
 }
 
 // 查詢單一 VNDB 角色資料(有CID版本，從選單選擇)

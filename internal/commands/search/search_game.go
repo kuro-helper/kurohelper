@@ -11,7 +11,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	"kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 	"kurohelperservice"
@@ -91,7 +91,7 @@ func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		}
 		switch optDB {
 		case "1":
-			navigator.SearchList(s, i, cache.VndbGameListStore, "vndb查詢遊戲列表", func() ([]vndb.GetVnIDUseListResponse, error) {
+			executor.SearchList(s, i, cache.VndbGameListStore, "vndb查詢遊戲列表", func() ([]vndb.GetVnIDUseListResponse, error) {
 				keyword, err := utils.GetOptions(i, "keyword")
 				if err != nil {
 					return nil, err
@@ -122,9 +122,9 @@ func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			})
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchGameCommandName, searchGameErogsRouteKey)
 		case switchMode{searchGameVndbRouteKey, utils.BackToHomeBehavior}:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
 		case switchMode{searchGameErogsRouteKey, utils.BackToHomeBehavior}:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, buildSearchGameComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, buildSearchGameComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
@@ -132,55 +132,10 @@ func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 }
 
 func (sg *SearchGame) Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	data := i.ApplicationCommandData()
-
-	// 找出目前使用者正在打字的那個選項
-	var focusedOption *discordgo.ApplicationCommandInteractionDataOption
-	for _, opt := range data.Options {
-		if opt.Focused {
-			focusedOption = opt
-			break
-		}
-	}
-
-	if focusedOption == nil {
+	choices, err := executor.GetAutocomplete(s, i, erogs.GamesName, erogs.GameInvertedIndex)
+	if err != nil {
+		slog.Warn(err.Error())
 		return
-	}
-
-	// 取得目前輸入的文字
-	userInput := focusedOption.StringValue()
-	userInput = strings.ToLower(userInput)
-	queryRunes := []rune(userInput)
-
-	if len(queryRunes) < 2 {
-		return
-	}
-
-	var choices []*discordgo.ApplicationCommandOptionChoice
-	if len(erogs.GamesName) == 0 {
-		slog.Warn("ErogsGameAutoComplete has not been initialized...")
-		return
-	}
-
-	targetIndices, ok := erogs.InvertedIndex[queryRunes[0]]
-	if !ok {
-		return
-	}
-
-	limit := 15
-
-	for _, idx := range targetIndices {
-		name := erogs.GamesName[idx]
-		if strings.Contains(strings.ToLower(name), userInput) {
-			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-				Name:  name,
-				Value: name,
-			})
-		}
-
-		if len(choices) >= limit {
-			break
-		}
 	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -193,7 +148,7 @@ func (sg *SearchGame) Autocomplete(s *discordgo.Session, i *discordgo.Interactio
 
 // 查詢遊戲列表
 func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	navigator.SearchList(s, i, cache.ErogsGameListStore, "erogs查詢遊戲列表", func() ([]erogs.GameList, error) {
+	executor.SearchList(s, i, cache.ErogsGameListStore, "erogs查詢遊戲列表", func() ([]erogs.GameList, error) {
 		keyword, err := utils.GetOptions(i, "keyword")
 		if err != nil {
 			return nil, err
@@ -219,7 +174,7 @@ func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsGameListStore, buildSearchGameComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsGameListStore, buildSearchGameComponents)
 }
 
 // 查詢單一遊戲資料(有CID版本，從選單選擇)
@@ -639,7 +594,7 @@ func vndbSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.InteractionC
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.VndbGameListStore, buildVndbSearchGameComponents)
+	executor.ChangePage(s, i, pageCID, cache.VndbGameListStore, buildVndbSearchGameComponents)
 }
 
 // 查詢單一 VNDB 遊戲資料(有CID版本，從選單選擇)

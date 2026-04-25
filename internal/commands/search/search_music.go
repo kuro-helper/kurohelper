@@ -11,7 +11,7 @@ import (
 
 	"kurohelper/internal/cache"
 	kurohelperrerrors "kurohelper/internal/errors"
-	"kurohelper/internal/navigator"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/utils"
 
 	"kurohelperservice"
@@ -33,10 +33,11 @@ func (sm *SearchMusic) Definition() *discordgo.ApplicationCommand {
 		Description: "根據關鍵字查詢音樂資料(批評空間)",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "keyword",
-				Description: "關鍵字",
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "keyword",
+				Description:  "關鍵字",
+				Autocomplete: true,
+				Required:     true,
 			},
 		},
 	}
@@ -49,7 +50,7 @@ func (sm *SearchMusic) Handler(s *discordgo.Session, i *discordgo.InteractionCre
 // 查詢音樂指令入口
 func (sm *SearchMusic) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		navigator.SearchList(s, i, cache.ErogsMusicListStore, "erogs查詢音樂列表", func() ([]erogs.MusicList, error) {
+		executor.SearchList(s, i, cache.ErogsMusicListStore, "erogs查詢音樂列表", func() ([]erogs.MusicList, error) {
 			keyword, err := utils.GetOptions(i, "keyword")
 			if err != nil {
 				return nil, err
@@ -66,11 +67,26 @@ func (sm *SearchMusic) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 			})
 			erogsSearchMusicWithSelectMenuCIDV2(s, i, cid, searchMusicCommandName, searchMusicRouteKey)
 		case utils.BackToHomeBehavior:
-			navigator.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsMusicListStore, buildSearchMusicComponents)
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
 	}
+}
+
+func (sm *SearchMusic) Autocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	choices, err := executor.GetAutocomplete(s, i, erogs.MusicsName, erogs.MusicInvertedIndex)
+	if err != nil {
+		slog.Warn(err.Error())
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }
 
 // 查詢音樂列表(有CID版本)
@@ -80,7 +96,7 @@ func erogsSearchMusicListWithCIDV2(s *discordgo.Session, i *discordgo.Interactio
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	navigator.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsMusicListStore, buildSearchMusicComponents)
 }
 
 // 查詢指定音樂(有CID版本)；backHomeCommandName/backHomeRouteKey 用於「返回」鈕對應的路由
