@@ -96,6 +96,8 @@ func BasicInit(stopChan <-chan struct{}) {
 	// erogs init
 	erogs.InitRateLimit(time.Duration(utils.GetEnvInt("EROGS_RATE_LIMIT_RESET_TIME", 10)))
 	erogs.InitErogsGameAutoComplete(os.Getenv("EROGS_GAME_AUTOCOMPLETE_FILE"))
+	erogs.InitErogsBrandAutoComplete(os.Getenv("EROGS_BRAND_AUTOCOMPLETE_FILE"))
+	erogs.InitErogsMusicAutoComplete(os.Getenv("EROGS_MUSIC_AUTOCOMPLETE_FILE"))
 
 	// seiya init
 	err = seiya.Init()
