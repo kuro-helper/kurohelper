@@ -81,7 +81,8 @@ func (a *AddInWish) HandleComponent(s *discordgo.Session, i *discordgo.Interacti
 		if strings.TrimSpace(userID) != "" && strings.TrimSpace(userName) != "" {
 			err := kurohelperdb.Dbs.Transaction(func(tx *gorm.DB) error {
 				// 1. 確保 User 存在
-				if _, err := kurohelperdb.EnsureUser(tx, userID, userName); err != nil {
+				user, err := kurohelperdb.EnsureDiscordUser(tx, userID, userName)
+				if err != nil {
 					return err
 				}
 
@@ -100,8 +101,11 @@ func (a *AddInWish) HandleComponent(s *discordgo.Session, i *discordgo.Interacti
 					return err
 				}
 
-				// 4. 建立資料
-				if err := kurohelperdb.CreateUserInWish(tx, userID, res.ID); err != nil {
+				// 4. 先確保有空殼資料，再更新願望清單標記
+				if err := kurohelperdb.EnsureUserGame(tx, user.ID, res.ID); err != nil {
+					return err
+				}
+				if err := kurohelperdb.UpdateUserGameWishListMark(tx, user.ID, res.ID, true); err != nil {
 					return err
 				}
 
@@ -122,6 +126,7 @@ func (a *AddInWish) HandleComponent(s *discordgo.Session, i *discordgo.Interacti
 				Color: 0x90B44B,
 			}
 			utils.InteractionEmbedRespondForSelf(s, i, embed, nil, true)
+			slog.Info("加收藏成功", "使用者ID", userID, "遊戲ID", res.ID, "遊戲名稱", res.Gamename)
 		} else { // 找不到使用者，此狀況應該會是Discord官方問題或是程式碼邏輯問題
 			embed := &discordgo.MessageEmbed{
 				Title: "找不到使用者！",
