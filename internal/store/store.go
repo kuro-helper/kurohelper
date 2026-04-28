@@ -48,6 +48,6 @@ func InitUser() {
 
 	// 存進快取
 	for _, e := range user {
-		UserStore[e.ID] = struct{}{}
+		UserStore[e.DiscordID] = struct{}{}
 	}
 }

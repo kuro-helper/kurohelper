@@ -16,8 +16,7 @@ import (
 
 type UserInfo struct {
 	User            kurohelperdb.User
-	HasPlayed       []kurohelperdb.UserHasPlayed
-	InWish          []kurohelperdb.UserInWish
+	UserGames       []kurohelperdb.UserGame
 	BrandStatistics []kurohelperdb.BrandCount
 	Avatar          string
 }
@@ -25,6 +24,18 @@ type UserInfo struct {
 type GetUserinfo struct{}
 
 const userInfoCommandName = "個人資料"
+
+func filterDisplayUserGames(userGames []kurohelperdb.UserGame) []kurohelperdb.UserGame {
+	filtered := make([]kurohelperdb.UserGame, 0, len(userGames))
+	for _, item := range userGames {
+		// Empty shell row: status=0 and no marks.
+		if item.Status == 0 && !item.BlackListMark && !item.WishListMark {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
 
 func (g *GetUserinfo) Definition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
@@ -48,11 +59,10 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 	var messageComponent []discordgo.MessageComponent
 	var user kurohelperdb.User
 	var brandStatistics []kurohelperdb.BrandCount
-	var hasPlayedCount int
-	var inWishCount int
+	var completedCount int
+	var wishCount int
 	var avatar string
-	listHasPlayed := make([]string, 0, 10)
-	listInWish := make([]string, 0, 10)
+	listUserGames := make([]string, 0, 10)
 
 	if cid != nil {
 		if cid.GetBehaviorID() != utils.PageBehavior {
@@ -71,9 +81,16 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			return
 		}
 		userInfo := cacheValue.(UserInfo)
+		filteredUserGames := filterDisplayUserGames(userInfo.UserGames)
 
-		hasPlayedCount = len(userInfo.HasPlayed)
-		inWishCount = len(userInfo.InWish)
+		for _, item := range filteredUserGames {
+			if item.Status == 1 {
+				completedCount++
+			}
+			if item.WishListMark {
+				wishCount++
+			}
+		}
 		user = userInfo.User
 		brandStatistics = userInfo.BrandStatistics
 		avatar = userInfo.Avatar
@@ -82,12 +99,7 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		pageIndex := pageCID.Value
 
 		var hasMore bool
-		hasPlayed, tmpMore := utils.PaginationR(userInfo.HasPlayed, pageIndex, true)
-		if tmpMore {
-			hasMore = true
-		}
-
-		inWish, tmpMore := utils.PaginationR(userInfo.InWish, pageIndex, true)
+		userGames, tmpMore := utils.PaginationR(filteredUserGames, pageIndex, true)
 		if tmpMore {
 			hasMore = true
 		}
@@ -125,31 +137,19 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			}
 		}
 
-		for i, hp := range hasPlayed {
+		startNo := pageIndex*10 + 1
+		for i, ug := range userGames {
 			if i == 10 {
 				break
 			}
 
-			t := getUserPlayRecordTime(&hp)
-			if t != "" {
-				listHasPlayed = append(listHasPlayed, fmt.Sprintf("* **%s**/*⏱️%s*", hp.GameErogs.Name, t))
-			} else {
-				listHasPlayed = append(listHasPlayed, fmt.Sprintf("* **%s**", hp.GameErogs.Name))
-			}
-		}
-
-		for i, iw := range inWish {
-			if i == 10 {
-				break
-			}
-
-			listInWish = append(listInWish, fmt.Sprintf("%d. %s", i+1, iw.GameErogs.Name))
+			listUserGames = append(listUserGames, formatUserGameLine(startNo+i, &ug))
 		}
 	} else {
 		userID := utils.GetUserID(i)
 
 		// User資料
-		userTmp, err := kurohelperdb.GetUser(kurohelperdb.Dbs, userID)
+		userTmp, err := kurohelperdb.GetUserByDiscordID(kurohelperdb.Dbs, userID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -165,21 +165,21 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		avatarURL := utils.GetAvatarURL(discordUser)
 		avatar = avatarURL
 
-		// 已玩資料
-		userHasPlayed, err := kurohelperdb.GetUserHasPlayedByID(kurohelperdb.Dbs, userID)
+		// UserGame資料（單一列表）
+		userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, userID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
-		hasPlayedCount = len(userHasPlayed)
-
-		// 收藏資料
-		userInWish, err := kurohelperdb.GetUserInWishByID(kurohelperdb.Dbs, userID)
-		if err != nil {
-			utils.HandleError(err, s, i)
-			return
+		userGames = filterDisplayUserGames(userGames)
+		for _, item := range userGames {
+			if item.Status == 1 {
+				completedCount++
+			}
+			if item.WishListMark {
+				wishCount++
+			}
 		}
-		inWishCount = len(userInWish)
 
 		// Brand資料統計
 		brandStatistics, err = kurohelperdb.GetUserHasPlayedBrandCount(userID)
@@ -189,11 +189,10 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		}
 
 		// 處理翻頁
-		if len(userInWish) > 10 || len(userHasPlayed) > 10 {
+		if len(userGames) > 10 {
 			userInfo := UserInfo{
 				User:            user,
-				HasPlayed:       userHasPlayed,
-				InWish:          userInWish,
+				UserGames:       userGames,
 				BrandStatistics: brandStatistics,
 				Avatar:          avatarURL,
 			}
@@ -210,25 +209,11 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			}
 		}
 
-		for i, hp := range userHasPlayed {
+		for i, ug := range userGames {
 			if i == 10 {
 				break
 			}
-
-			t := getUserPlayRecordTime(&hp)
-			if t != "" {
-				listHasPlayed = append(listHasPlayed, fmt.Sprintf("* **%s**/*⏱️%s*", hp.GameErogs.Name, t))
-			} else {
-				listHasPlayed = append(listHasPlayed, fmt.Sprintf("* **%s**", hp.GameErogs.Name))
-			}
-		}
-
-		for i, iw := range userInWish {
-			if i == 10 {
-				break
-			}
-
-			listInWish = append(listInWish, fmt.Sprintf("* %s", iw.GameErogs.Name))
+			listUserGames = append(listUserGames, formatUserGameLine(i+1, &ug))
 		}
 	}
 
@@ -243,12 +228,8 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		}
 	}
 
-	if len(listHasPlayed) == 0 {
-		listHasPlayed = append(listHasPlayed, "**此頁無資料**")
-	}
-
-	if len(listInWish) == 0 {
-		listInWish = append(listInWish, "**此頁無資料**")
+	if len(listUserGames) == 0 {
+		listUserGames = append(listUserGames, "**無資料**")
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -265,14 +246,9 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 				Inline: false,
 			},
 			{
-				Name:   fmt.Sprintf("最近遊玩完畢(%d)", hasPlayedCount),
-				Value:  strings.Join(listHasPlayed, "\n"),
-				Inline: true,
-			},
-			{
-				Name:   fmt.Sprintf("最近收藏(%d)", inWishCount),
-				Value:  strings.Join(listInWish, "\n"),
-				Inline: true,
+				Name:   fmt.Sprintf("遊戲列表（✅ 已玩 %d / ❤️ 收藏 %d）", completedCount, wishCount),
+				Value:  strings.Join(listUserGames, "\n"),
+				Inline: false,
 			},
 		},
 	}
@@ -286,9 +262,29 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 	}
 }
 
-func getUserPlayRecordTime(hp *kurohelperdb.UserHasPlayed) string {
-	if hp.CompletedAt != nil {
-		return hp.CompletedAt.Format("2006-01-02")
+func getUserGameRecordTime(ug *kurohelperdb.UserGame) string {
+	if ug.FinishedDate != nil {
+		return ug.FinishedDate.Format("2006-01-02")
 	}
 	return ""
+}
+
+func formatUserGameLine(index int, ug *kurohelperdb.UserGame) string {
+	flags := make([]string, 0, 2)
+	if ug.Status == 1 {
+		flags = append(flags, "✅")
+	}
+	if ug.WishListMark {
+		flags = append(flags, "❤️")
+	}
+	prefix := strings.Join(flags, "")
+	if prefix == "" {
+		prefix = "▫️"
+	}
+
+	t := getUserGameRecordTime(ug)
+	if t != "" {
+		return fmt.Sprintf("%d. %s **%s**  ⏱️%s", index, prefix, ug.GameErogs.Name, t)
+	}
+	return fmt.Sprintf("%d. %s **%s**", index, prefix, ug.GameErogs.Name)
 }

@@ -515,26 +515,24 @@ func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCre
 func getErogsUserPlayWishMaps(i *discordgo.InteractionCreate) (hasPlayedMap, inWishMap map[int]struct{}) {
 	hasPlayedMap = make(map[int]struct{})
 	inWishMap = make(map[int]struct{})
-	userID := utils.GetUserID(i)
-	if strings.TrimSpace(userID) == "" {
+	discordID := utils.GetUserID(i)
+	if strings.TrimSpace(discordID) == "" {
 		return hasPlayedMap, inWishMap
 	}
-	if _, ok := store.UserStore[userID]; !ok {
+	if _, ok := store.UserStore[discordID]; !ok {
 		return hasPlayedMap, inWishMap
 	}
-	userHasPlayed, err := kurohelperdb.GetUserHasPlayedByID(kurohelperdb.Dbs, userID)
+	userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, discordID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return hasPlayedMap, inWishMap
 	}
-	for _, item := range userHasPlayed {
-		hasPlayedMap[item.GameErogsID] = struct{}{}
-	}
-	userInWish, err := kurohelperdb.GetUserInWishByID(kurohelperdb.Dbs, userID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return hasPlayedMap, inWishMap
-	}
-	for _, item := range userInWish {
-		inWishMap[item.GameErogsID] = struct{}{}
+	for _, item := range userGames {
+		if item.Status == 1 {
+			hasPlayedMap[item.GameErogsID] = struct{}{}
+		}
+		if item.WishListMark {
+			inWishMap[item.GameErogsID] = struct{}{}
+		}
 	}
 	return hasPlayedMap, inWishMap
 }
