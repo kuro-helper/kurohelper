@@ -43,11 +43,10 @@ var commandMap = map[string]SlashCommand{
 	"隨機遊戲": &random.RandomGame{},
 	"隨機角色": &random.RandomCharacter{},
 	// 使用者相關指令
-	"個人資料": &user.GetUserinfo{},
-	"加已玩":  &user.AddHasPlayed{},
-	"加收藏":  &user.AddInWish{},
-	"刪除已玩": &user.RemoveHasPlayed{},
-	"刪除收藏": &user.RemoveInWish{},
+	"個人資料":      &user.GetUserinfo{},
+	"加已玩":       &user.AddHasPlayed{},
+	"加收藏":       &user.AddInWish{},
+	"刪除使用者遊戲資料": &user.RemoveUserGame{},
 	// vndb專用指令
 	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令

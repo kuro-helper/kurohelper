@@ -224,25 +224,24 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	}
 
 	// 處理使用者資訊
-	userID := utils.GetUserID(i)
-	var userData string
-	_, err = kurohelperdb.GetUserHasPlayedByUserAndGameID(kurohelperdb.Dbs, userID, res.ID)
-	if err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-			return
-		}
-	} else {
-		userData += "✅"
+	discordID := utils.GetUserID(i)
+	var userData strings.Builder
+	userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, discordID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+		return
 	}
-	_, err = kurohelperdb.GetUserInWishByUserAndGameID(kurohelperdb.Dbs, userID, res.ID)
-	if err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
-			return
+	for _, item := range userGames {
+		if item.GameErogsID != res.ID {
+			continue
 		}
-	} else {
-		userData += "❤️"
+		if item.Status == 1 {
+			userData.WriteString("✅")
+		}
+		if item.WishListMark {
+			userData.WriteString("❤️")
+		}
+		break
 	}
 
 	// 獲取 VNDB 資料
@@ -361,7 +360,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 			}
 		} else {
 			// DM
-			if _, ok := store.GuildDiscordAllowList[userID]; !ok {
+			if _, ok := store.GuildDiscordAllowList[discordID]; !ok {
 				imageURL = ""
 			}
 		}
@@ -465,7 +464,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	containerComponents := []discordgo.MessageComponent{
 		discordgo.TextDisplay{
-			Content: fmt.Sprintf("# %s**%s(%s)**", userData, res.Gamename, res.SellDay),
+			Content: fmt.Sprintf("# %s**%s(%s)**", userData.String(), res.Gamename, res.SellDay),
 		},
 		discordgo.Separator{Divider: &divider},
 		section,
