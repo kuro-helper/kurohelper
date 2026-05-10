@@ -211,7 +211,7 @@ func (c *CIDV2) ChangeValue(value string) {
 // CID標示符是P
 func MakePageCIDV2(commandName, routeKey string, index int, cacheID string, disable bool) string {
 	if disable {
-		return fmt.Sprintf("%s:%s:%s:P:99", commandName, routeKey, cacheID)
+		return fmt.Sprintf("%s:%s:%s:P:-99", commandName, routeKey, cacheID)
 	}
 	return fmt.Sprintf("%s:%s:%s:P:%d", commandName, routeKey, cacheID, index)
 }

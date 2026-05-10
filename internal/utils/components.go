@@ -61,7 +61,7 @@ func MakeChangePageComponent(commandName, routeKey string, currentPage int, tota
 		Label:    fmt.Sprintf("%d/%d", currentPage, totalPage),
 		Style:    discordgo.SecondaryButton,
 		Disabled: true,
-		CustomID: MakePageCIDV2(commandName, routeKey, currentPage, cacheID, true),
+		CustomID: MakePageCIDV2(commandName, routeKey, 0, cacheID, true),
 	}
 
 	previousDisabled := false
@@ -89,6 +89,42 @@ func MakeChangePageComponent(commandName, routeKey string, currentPage int, tota
 		Style:    discordgo.SecondaryButton,
 		Disabled: nextDisabled,
 		CustomID: MakePageCIDV2(commandName, routeKey, currentPage+1, cacheID, false),
+	}
+
+	if totalPage != 1 {
+		firstButton := discordgo.Button{
+			Label:    "⏪",
+			Style:    discordgo.PrimaryButton,
+			Disabled: previousDisabled,
+			CustomID: MakePageCIDV2(commandName, routeKey, 1, cacheID, false),
+		}
+
+		if firstButton.CustomID == previousButton.CustomID {
+			firstButton.Disabled = true
+			firstButton.CustomID = MakePageCIDV2(commandName, routeKey, -1, cacheID, false)
+		}
+
+		lastButton := discordgo.Button{
+			Label:    "⏩",
+			Style:    discordgo.PrimaryButton,
+			Disabled: nextDisabled,
+			CustomID: MakePageCIDV2(commandName, routeKey, totalPage, cacheID, false),
+		}
+
+		if lastButton.CustomID == nextButton.CustomID {
+			lastButton.Disabled = true
+			lastButton.CustomID = MakePageCIDV2(commandName, routeKey, 99, cacheID, false)
+		}
+
+		return &discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				firstButton,
+				previousButton,
+				tabButton,
+				nextButton,
+				lastButton,
+			},
+		}, nil
 	}
 
 	return &discordgo.ActionsRow{
