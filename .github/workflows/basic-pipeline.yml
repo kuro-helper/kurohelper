@@ -20,6 +20,10 @@ on:
       - main
 
 jobs:
+  event-send:
+    uses: kuro-helper/.github/.github/workflows/event-send.yml@main
+    secrets: inherit
+    
   commit-lint:
     uses: kuro-helper/.github/.github/workflows/commit-lint.yml@main
 
