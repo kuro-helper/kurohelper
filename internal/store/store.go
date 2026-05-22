@@ -48,6 +48,9 @@ func InitUser() {
 
 	// 存進快取
 	for _, e := range user {
-		UserStore[e.DiscordID] = struct{}{}
+		if e.DiscordID == nil || *e.DiscordID == "" {
+			continue
+		}
+		UserStore[*e.DiscordID] = struct{}{}
 	}
 }
