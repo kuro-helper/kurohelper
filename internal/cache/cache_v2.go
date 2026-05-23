@@ -21,42 +21,42 @@ var (
 // 批評空間快取
 var (
 	// 使用關鍵字Base64作為鍵
-	ErogsGameListStore = NewCacheStoreV2[[]erogs.GameList](2 * time.Hour)
+	ErogsGameListStore = NewCacheStoreV2[[]erogs.GameList](cacheLostTime)
 	// 使用批評空間ID作為鍵
-	ErogsGameStore = NewCacheStoreV2[*erogs.Game](2 * time.Hour)
+	ErogsGameStore = NewCacheStoreV2[*erogs.Game](cacheLostTime)
 	// 使用關鍵字Base64作為鍵
-	ErogsMusicListStore = NewCacheStoreV2[[]erogs.MusicList](2 * time.Hour)
+	ErogsMusicListStore = NewCacheStoreV2[[]erogs.MusicList](cacheLostTime)
 	// 使用批評空間ID作為鍵
-	ErogsMusicStore = NewCacheStoreV2[*erogs.Music](2 * time.Hour)
+	ErogsMusicStore = NewCacheStoreV2[*erogs.Music](cacheLostTime)
 	// 使用關鍵字Base64作為鍵
-	ErogsBrandStore = NewCacheStoreV2[*erogs.Brand](2 * time.Hour)
+	ErogsBrandStore = NewCacheStoreV2[*erogs.Brand](cacheLostTime)
 	// 創作者列表：使用關鍵字 Base64 作為鍵
-	ErogsCreatorListStore = NewCacheStoreV2[[]erogs.CreatorList](2 * time.Hour)
+	ErogsCreatorListStore = NewCacheStoreV2[[]erogs.CreatorList](cacheLostTime)
 	// 歌手列表：使用關鍵字 Base64 作為鍵
-	ErogsSingerListStore = NewCacheStoreV2[[]erogs.CreatorList](2 * time.Hour)
+	ErogsSingerListStore = NewCacheStoreV2[[]erogs.CreatorList](cacheLostTime)
 	// 創作者詳情：使用 "e" + 創作者 ID 作為鍵
-	ErogsCreatorStore = NewCacheStoreV2[*erogs.Creator](2 * time.Hour)
+	ErogsCreatorStore = NewCacheStoreV2[*erogs.Creator](cacheLostTime)
 	// 歌手詳情：使用 "e" + 歌手 ID 作為鍵
-	ErogsSingerStore = NewCacheStoreV2[*erogs.Singer](2 * time.Hour)
+	ErogsSingerStore = NewCacheStoreV2[*erogs.Singer](cacheLostTime)
 )
 
 // VNDB快取
 var (
 	// 使用關鍵字Base64作為鍵
-	VndbGameListStore = NewCacheStoreV2[[]vndb.GetVnIDUseListResponse](2 * time.Hour)
+	VndbGameListStore = NewCacheStoreV2[[]vndb.GetVnIDUseListResponse](cacheLostTime)
 	// 使用VNDB ID作為鍵 (遊戲詳細資料,可被遊戲搜尋和品牌搜尋共用)
-	VndbGameStore = NewCacheStoreV2[*vndb.BasicResponse[vndb.GetVnUseIDResponse]](2 * time.Hour)
+	VndbGameStore = NewCacheStoreV2[*vndb.BasicResponse[vndb.GetVnUseIDResponse]](cacheLostTime)
 	// 使用關鍵字Base64作為鍵
-	VndbBrandStore = NewCacheStoreV2[*vndb.ProducerSearchResponse](2 * time.Hour)
+	VndbBrandStore = NewCacheStoreV2[*vndb.ProducerSearchResponse](cacheLostTime)
 	// 角色列表：使用關鍵字 Base64 作為鍵
-	VndbCharacterListStore = NewCacheStoreV2[[]vndb.CharacterSearchResponse](2 * time.Hour)
+	VndbCharacterListStore = NewCacheStoreV2[[]vndb.CharacterSearchResponse](cacheLostTime)
 	// 角色詳情：使用 VNDB 角色 ID（如 c123）作為鍵
-	VndbCharacterStore = NewCacheStoreV2[*vndb.CharacterSearchResponse](2 * time.Hour)
+	VndbCharacterStore = NewCacheStoreV2[*vndb.CharacterSearchResponse](cacheLostTime)
 )
 
 // Bangumi快取(因為沒有任何CID事件，所以直接拿搜尋關鍵字做 base64 對應實際資料)
 var (
-	BangumiCharacterStore = NewCacheStoreV2[*bangumi.Character](2 * time.Hour)
+	BangumiCharacterStore = NewCacheStoreV2[*bangumi.Character](cacheLostTime)
 )
 
 // 使用者相關快取(混合資料型態)

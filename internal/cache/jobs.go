@@ -11,7 +11,7 @@ import (
 // 先不檢查快取存活時間，統一全部清除
 func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
 	slog.Info("CleanCacheJob 正在啟動...")
-	ticker := time.NewTicker(minute * time.Minute)
+	ticker := time.NewTicker(minute * time.Hour)
 	defer ticker.Stop()
 	for {
 		select {

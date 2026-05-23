@@ -204,7 +204,13 @@ func WebhookEditRespond(s *discordgo.Session, i *discordgo.InteractionCreate, co
 	})
 	if err != nil {
 		slog.Error(err.Error())
-		InteractionRespond(s, i, "該功能目前異常，請稍後再嘗試")
+		errorComponents := MakeErrorComponentV2("該功能目前異常，請稍後再嘗試")
+		if _, editErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Flags:      discordgo.MessageFlagsIsComponentsV2,
+			Components: &errorComponents,
+		}); editErr != nil {
+			slog.Error(editErr.Error())
+		}
 	}
 }
 
