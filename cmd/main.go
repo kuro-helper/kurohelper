@@ -83,6 +83,8 @@ func main() {
 	service.InitZhtwToJp()
 	// 使用者快取初始化
 	store.InitUser()
+	// 初始化快取時間
+	cache.InitCacheLostTime(utils.GetEnvInt("COMMAND_CACHE_LOST_HOURS", 4))
 	// Seiya初始化
 	seiya.InitSeiyaCorrespond()
 	err := seiya.Init()
@@ -108,7 +110,7 @@ func main() {
 
 	// 掛載自動清除快取job
 	stopChan := make(chan struct{})
-	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("CLEAN_CACHE_JOB_TIME", 720)), stopChan)
+	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("COMMAND_CLEAN_CACHE_JOB_HOURS", 12)), stopChan)
 
 	token := os.Getenv("BOT_TOKEN")
 	kuroHelper, err := discordgo.New("Bot " + token)

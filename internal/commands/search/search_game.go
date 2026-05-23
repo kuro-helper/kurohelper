@@ -575,10 +575,6 @@ func ymgalGetGameString(keyword string) (string, error) {
 		return "", err
 	}
 
-	if len(searchGameRes.Result) == 0 {
-		return "", kurohelperservice.ErrSearchNoContent
-	}
-
 	sort.Slice(searchGameRes.Result, func(i, j int) bool {
 		return searchGameRes.Result[i].Weights > searchGameRes.Result[j].Weights
 	})
