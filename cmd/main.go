@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,10 +13,18 @@ import (
 	"github.com/lmittmann/tint"
 	slogmulti "github.com/samber/slog-multi"
 
-	"kurohelper/internal/bootstrap"
 	"kurohelper/internal/bot"
+	"kurohelper/internal/cache"
+	"kurohelper/internal/store"
+	"kurohelper/internal/utils"
+	service "kurohelperservice"
+	"kurohelperservice/db"
+	"kurohelperservice/provider/erogs"
+	"kurohelperservice/provider/seiya"
+	"kurohelperservice/provider/ymgal"
 )
 
+// 專案前置初始化
 func init() {
 	// load .env
 	err := godotenv.Load(".env")
@@ -64,9 +73,42 @@ func init() {
 }
 
 func main() {
-	// 初始化專案作業
+	// ----初始化專案作業開始----
+
+	// 資料庫初始化
+	dbInit()
+	// 初始化白名單存成快取
+	store.InitAllowList()
+	// init ZhtwToJp var
+	service.InitZhtwToJp()
+	// 使用者快取初始化
+	store.InitUser()
+	// Seiya初始化
+	seiya.InitSeiyaCorrespond()
+	err := seiya.Init()
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
+	// erogs init
+	erogs.InitRateLimit(time.Duration(utils.GetEnvInt("EROGS_RATE_LIMIT_RESET_TIME", 10)))
+	erogs.InitErogsGameAutoComplete(os.Getenv("EROGS_GAME_AUTOCOMPLETE_FILE"))
+	erogs.InitErogsBrandAutoComplete(os.Getenv("EROGS_BRAND_AUTOCOMPLETE_FILE"))
+	erogs.InitErogsMusicAutoComplete(os.Getenv("EROGS_MUSIC_AUTOCOMPLETE_FILE"))
+	// ymgal init
+	if strings.EqualFold(os.Getenv("INIT_YMGAL"), "true") {
+		err = ymgalInit()
+		if err != nil {
+			slog.Error(err.Error())
+			os.Exit(1)
+		}
+	}
+
+	// ----初始化專案作業結束----
+
+	// 掛載自動清除快取job
 	stopChan := make(chan struct{})
-	bootstrap.BasicInit(stopChan)
+	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("CLEAN_CACHE_JOB_TIME", 720)), stopChan)
 
 	token := os.Getenv("BOT_TOKEN")
 	kuroHelper, err := discordgo.New("Bot " + token)
@@ -97,4 +139,35 @@ func main() {
 	close(stopChan)
 
 	kuroHelper.Close() // websocket disconnect
+}
+
+// db init
+func dbInit() {
+	config := db.Config{
+		DBOwner:    os.Getenv("DB_OWNER"),
+		DBPassword: os.Getenv("DB_PASSWORD"),
+		DBName:     os.Getenv("DB_NAME"),
+		DBPort:     os.Getenv("DB_PORT"),
+	}
+
+	err := db.InitDsn(config)
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
+	db.Migration(db.Dbs) // 選填
+}
+
+// ymgal init
+func ymgalInit() error {
+	// init config
+	ymgal.Init(os.Getenv("YMGAL_ENDPOINT"), os.Getenv("YMGAL_CLIENT_ID"), os.Getenv("YMGAL_CLIENT_SECRET"))
+
+	// init token
+	// ymgal init token
+	err := ymgal.GetToken()
+	if err != nil {
+		return err
+	}
+	return nil
 }
