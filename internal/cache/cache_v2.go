@@ -10,12 +10,17 @@ import (
 	"kurohelperservice/provider/vndb"
 )
 
-// CID快取
+// CID V2快取
 //
 // 對每一次查詢建立CID以及關鍵字的關聯
 // 因為CID不允許過長字元，所以遇到很長的關鍵字時會直接丟錯，所以才需要這層快取
 var (
-	CIDStore = NewCacheStoreV2[string](time.Hour)
+	CIDV2Store = NewCacheStoreV2[string](time.Hour)
+)
+
+// 更通用的CID快取，給CID V3用
+var (
+	CIDV3Store = NewCacheStoreV2[any](time.Hour)
 )
 
 // 批評空間快取

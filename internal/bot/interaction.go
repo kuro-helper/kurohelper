@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -20,9 +21,14 @@ type SlashCommand interface {
 	Handler(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
-// 使用新版CID的介面
+// 使用CIDV2的介面
 type ComponentV2Handler interface {
 	HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2)
+}
+
+// 使用CIDV3的介面
+type ComponentV3Handler interface {
+	HandleComponentV2(s *discordgo.Session, i *discordgo.InteractionCreate, uuid string)
 }
 
 // 選擇性介面：只有需要自動補完的指令才實作此方法
@@ -93,7 +99,34 @@ func OnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 
 	case discordgo.InteractionMessageComponent:
-		cid, err := utils.ParseCIDV2(i.MessageComponentData().CustomID)
+		customID := i.MessageComponentData().CustomID
+
+		// 處理V3版CID
+		if after, ok := strings.CutPrefix(customID, "v3@"); ok {
+			parts := strings.SplitN(after, ":", 2)
+			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+				utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
+				return
+			}
+
+			cmd := GetSlashCommand(parts[0])
+			if cmd == nil {
+				slog.Warn(parts[0] + " 沒有註冊SlashCommand")
+				return
+			}
+
+			v3cmd, ok := cmd.(ComponentV3Handler)
+			if !ok {
+				slog.Warn(parts[0] + " 沒有實作ComponentV3Handler")
+				return
+			}
+
+			go v3cmd.HandleComponentV2(s, i, parts[1])
+			return
+		}
+
+		// V2版CID
+		cid, err := utils.ParseCIDV2(customID)
 		if err != nil {
 			utils.HandleError(kurohelpererrors.ErrCIDWrongFormat, s, i)
 			return

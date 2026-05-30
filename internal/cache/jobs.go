@@ -19,8 +19,10 @@ func CleanCacheJob(minute time.Duration, stopChan <-chan struct{}) {
 			// 清除Cache
 			egsDC, egsC := UserInfoCache.Clean() // 混和型態快取
 			slog.Info(fmt.Sprintf("UserInfoCache          快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
-			egsDC, egsC = CIDStore.Clean()
-			slog.Info(fmt.Sprintf("CIDStore               快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+			egsDC, egsC = CIDV2Store.Clean()
+			slog.Info(fmt.Sprintf("CIDV2Store             快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
+			egsDC, egsC = CIDV3Store.Clean()
+			slog.Info(fmt.Sprintf("CIDV3Store             快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsGameListStore.Clean()
 			slog.Info(fmt.Sprintf("ErogsGameListStore     快取資料: %d筆/%d筆 (清理/總數)", egsDC, egsC))
 			egsDC, egsC = ErogsGameStore.Clean()

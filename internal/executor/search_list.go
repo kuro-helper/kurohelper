@@ -43,7 +43,7 @@ func SearchList[T any](
 	cacheValue, err := store.Get(cacheKey)
 	if err == nil {
 		// 存入CID與關鍵字的對應快取
-		cache.CIDStore.Set(idStr, cacheKey)
+		cache.CIDV2Store.Set(idStr, cacheKey)
 
 		// 快取存在，直接使用，不需要延遲傳送
 		components, err := builder(cacheValue, 1, idStr)
@@ -73,7 +73,7 @@ func SearchList[T any](
 	store.Set(cacheKey, res)
 
 	// 存入CID與關鍵字的對應快取
-	cache.CIDStore.Set(idStr, cacheKey)
+	cache.CIDV2Store.Set(idStr, cacheKey)
 
 	components, err := builder(res, 1, idStr)
 	if err != nil {
