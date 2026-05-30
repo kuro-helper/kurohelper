@@ -249,7 +249,7 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 	selectMenuCID := cid.ToSelectMenuCIDV2()
 
 	// 檢查 CID 快取是否存在
-	if _, err := cache.CIDStore.Get(selectMenuCID.CacheID); err != nil {
+	if _, err := cache.CIDV2Store.Get(selectMenuCID.CacheID); err != nil {
 		utils.HandleErrorV2(kurohelperservice.ErrCacheLost, s, i, utils.InteractionRespondEditComplex)
 		return
 	}

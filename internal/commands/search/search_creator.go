@@ -150,7 +150,7 @@ func erogsSearchCreatorWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.In
 
 	// 選擇後與原列表脫鉤，僅用 PageCID：cacheID 只存 creatorKey，後續翻頁完全獨立
 	detailCacheID := uuid.New().String()
-	cache.CIDStore.Set(detailCacheID, creatorKey)
+	cache.CIDV2Store.Set(detailCacheID, creatorKey)
 
 	components, err := buildSearchCreatorDetailComponents(res, 1, detailCacheID)
 	if err != nil {

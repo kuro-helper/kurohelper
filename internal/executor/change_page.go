@@ -27,7 +27,7 @@ func ChangePage[T any](
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
 	})
 
-	cidCacheValue, err := cache.CIDStore.Get(pageCID.CacheID)
+	cidCacheValue, err := cache.CIDV2Store.Get(pageCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return

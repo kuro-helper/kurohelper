@@ -146,7 +146,7 @@ func erogsSearchSingerWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Int
 	}
 
 	detailCacheID := uuid.New().String()
-	cache.CIDStore.Set(detailCacheID, singerKey)
+	cache.CIDV2Store.Set(detailCacheID, singerKey)
 
 	components, err := buildSearchSingerDetailComponents(res, 1, detailCacheID)
 	if err != nil {

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -40,7 +41,15 @@ func filterDisplayUserGames(userGames []kurohelperdb.UserGame) []kurohelperdb.Us
 func (g *GetUserinfo) Definition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "個人資料",
-		Description: "取得自己的個人資料",
+		Description: "取得個人資料",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "discord_id",
+				Description: "要查詢的使用者 Discord ID（選填）",
+				Required:    false,
+			},
+		},
 	}
 }
 
@@ -146,27 +155,40 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			listUserGames = append(listUserGames, formatUserGameLine(startNo+i, &ug))
 		}
 	} else {
-		userID := utils.GetUserID(i)
+		requesterID := utils.GetUserID(i)
+		targetDiscordID := requesterID
+
+		targetUserIDOption, err := utils.GetOptions(i, "discord_id")
+		if err != nil && !errors.Is(err, kurohelpererrors.ErrOptionNotFound) {
+			utils.HandleError(err, s, i)
+			return
+		}
+		if strings.TrimSpace(targetUserIDOption) != "" {
+			targetDiscordID = strings.TrimSpace(targetUserIDOption)
+		}
 
 		// User資料
-		userTmp, err := kurohelperdb.GetUserByDiscordID(kurohelperdb.Dbs, userID)
+		userTmp, err := kurohelperdb.GetUserByDiscordID(kurohelperdb.Dbs, targetDiscordID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
 		}
 		user = userTmp
 
-		// 取得使用者照片
-		discordUser := i.Interaction.User
-		if discordUser == nil && i.Interaction.Member != nil {
-			// 如果互動在 guild 裡，使用 Member.User
-			discordUser = i.Interaction.Member.User
+		if targetDiscordID != requesterID && user.PrivateGameData {
+			utils.HandleError(kurohelpererrors.ErrPrivateGameData, s, i)
+			return
 		}
-		avatarURL := utils.GetAvatarURL(discordUser)
+
+		// 取得使用者照片
+		avatarURL := discordgo.EndpointDefaultUserAvatar(0)
+		if discordUser, err := s.User(targetDiscordID); err == nil {
+			avatarURL = utils.GetAvatarURL(discordUser)
+		}
 		avatar = avatarURL
 
 		// UserGame資料（單一列表）
-		userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, userID)
+		userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, targetDiscordID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return
@@ -182,7 +204,7 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		}
 
 		// Brand資料統計
-		brandStatistics, err = kurohelperdb.GetUserHasPlayedBrandCount(userID)
+		brandStatistics, err = kurohelperdb.GetUserHasPlayedBrandCount(targetDiscordID)
 		if err != nil {
 			utils.HandleError(err, s, i)
 			return

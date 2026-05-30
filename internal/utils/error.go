@@ -28,6 +28,8 @@ func HandleError(err error, s *discordgo.Session, i *discordgo.InteractionCreate
 		InteractionEmbedRespond(s, i, MakeErrorEmbedMsg("日期格式錯誤，格式為YYYYMMDD"), nil, true)
 	case errors.Is(err, kurohelpererror.ErrDateExceedsTomorrow):
 		InteractionEmbedRespond(s, i, MakeErrorEmbedMsg("日期格式錯誤，完成日期不得超過今日加一天"), nil, true)
+	case errors.Is(err, kurohelpererror.ErrPrivateGameData):
+		InteractionEmbedRespond(s, i, MakeErrorEmbedMsg("該使用者已開啟隱私遊戲資料，無法查看"), nil, true)
 	case errors.Is(err, kurohelperservice.ErrBangumiCharacterListSearchNotSupported):
 		InteractionEmbedRespond(s, i, MakeErrorEmbedMsg("目前不支援對Bangumi使用角色列表搜尋"), nil, true)
 	case errors.Is(err, kurohelpererror.ErrCIDGetParameterFailed):
@@ -73,6 +75,8 @@ func HandleErrorV2(
 		errMsg = "日期格式錯誤，格式為YYYYMMDD"
 	case errors.Is(err, kurohelpererror.ErrDateExceedsTomorrow):
 		errMsg = "日期格式錯誤，完成日期不得超過今日加一天"
+	case errors.Is(err, kurohelpererror.ErrPrivateGameData):
+		errMsg = "該使用者已開啟隱私遊戲資料，無法查看"
 	case errors.Is(err, kurohelperservice.ErrBangumiCharacterListSearchNotSupported):
 		errMsg = "目前不支援對Bangumi使用角色列表搜尋"
 	case errors.Is(err, kurohelperservice.ErrCacheLost):
