@@ -29,4 +29,6 @@ var (
 	ErrTimeWrongFormat = errors.New("time: wrong format")
 	// date exceeds tomorrow error
 	ErrDateExceedsTomorrow = errors.New("time: date exceeds tomorrow")
+	// target user has private game data enabled
+	ErrPrivateGameData = errors.New("user: private game data enabled")
 )

@@ -54,6 +54,7 @@ var commandMap = map[string]SlashCommand{
 	"加已玩":       &user.AddHasPlayed{},
 	"加收藏":       &user.AddInWish{},
 	"刪除使用者遊戲資料": &user.RemoveUserGame{},
+	"帳號設定":      &user.Preference{},
 	// vndb專用指令
 	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令
