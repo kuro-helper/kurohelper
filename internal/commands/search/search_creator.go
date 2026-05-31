@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	searchCreatorListItemsPerPage   = 10
-	searchCreatorItemsPerPage       = 7
+	searchCreatorListItemsPerPage   = 5
+	searchCreatorItemsPerPage       = 5
 	searchCreatorCommandName        = "查詢創作者"
 	searchCreatorListRouteKey       = "list"
 	searchCreatorDetailRouteKey     = "detail"

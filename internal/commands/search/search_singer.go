@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	searchSingerItemsPerPage        = 10
-	searchSingerDetailItemsPerPage  = 7
+	searchSingerItemsPerPage        = 5
+	searchSingerDetailItemsPerPage  = 5
 	searchSingerCommandName         = "查詢歌手"
 	searchSingerListRouteKey        = "list"
 	searchSingerDetailRouteKey      = "detail"

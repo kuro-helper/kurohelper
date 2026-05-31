@@ -94,7 +94,7 @@ func MakeChangePageComponent(commandName, routeKey string, currentPage int, tota
 	if totalPage != 1 {
 		firstButton := discordgo.Button{
 			Label:    "⏪",
-			Style:    discordgo.PrimaryButton,
+			Style:    discordgo.SecondaryButton,
 			Disabled: previousDisabled,
 			CustomID: MakePageCIDV2(commandName, routeKey, 1, cacheID, false),
 		}
@@ -106,7 +106,7 @@ func MakeChangePageComponent(commandName, routeKey string, currentPage int, tota
 
 		lastButton := discordgo.Button{
 			Label:    "⏩",
-			Style:    discordgo.PrimaryButton,
+			Style:    discordgo.SecondaryButton,
 			Disabled: nextDisabled,
 			CustomID: MakePageCIDV2(commandName, routeKey, totalPage, cacheID, false),
 		}
