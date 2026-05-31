@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	searchBrandItemsPerPage  = 7
+	searchBrandItemsPerPage  = 5
 	searchBrandCommandName   = "查詢公司品牌"
 	searchBrandVNDBRouteKey  = "vndb"
 	searchBrandErogsRouteKey = "erogs"

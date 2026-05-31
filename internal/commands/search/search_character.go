@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	searchCharacterListItemsPerPage = 10
+	searchCharacterListItemsPerPage = 5
 	searchCharacterCommandName      = "查詢角色"
 	searchCharacterVNDBRouteKey     = "vndb"
 )

@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	searchGameListItemsPerPage = 10
+	searchGameListItemsPerPage = 5
 	searchGameCommandName      = "查詢遊戲"
 	searchGameErogsRouteKey    = "erogs"
 	searchGameVndbRouteKey     = "vndb"
