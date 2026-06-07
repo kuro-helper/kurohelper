@@ -239,14 +239,22 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		}
 	}
 
-	listData := make([]string, 0, len(brandStatistics))
-	for i, b := range brandStatistics {
-		if i >= 5 { // 已經到第六筆，直接跳出
-			break
+	// 依遊玩數量分星級（相同數量的公司合併在同一行），最多顯示 5 個星級
+	listData := make([]string, 0, 5)
+	tier := 0
+	for i := 0; i < len(brandStatistics); {
+		count := brandStatistics[i].Count
+		names := make([]string, 0)
+		// brandStatistics 已依 count 由大到小排序，相同數量必相鄰
+		for i < len(brandStatistics) && brandStatistics[i].Count == count {
+			names = append(names, brandStatistics[i].BrandName)
+			i++
 		}
-		if i <= 4 {
-			star := strings.Repeat("⭐", 5-i)
-			listData = append(listData, fmt.Sprintf("%s **%s: (%d)**", star, b.BrandName, b.Count))
+		star := strings.Repeat("⭐", 5-tier)
+		listData = append(listData, fmt.Sprintf("%s **%s: (%d)**", star, strings.Join(names, " | "), count))
+		tier++
+		if tier >= 5 {
+			break
 		}
 	}
 
