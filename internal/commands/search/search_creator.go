@@ -210,14 +210,14 @@ func buildSearchCreatorDetailComponents(res *erogs.Creator, currentPage int, pag
 		shokushu := make([]string, 0, len(g.Shokushu))
 		for _, s := range g.Shokushu {
 			if s.Shubetu != 7 {
-				shokushu = append(shokushu, fmt.Sprintf("*%s*", erogs.ShubetuMap[s.Shubetu]))
+				shokushu = append(shokushu, fmt.Sprintf("*%s (%s)*", erogs.ShubetuMap[s.Shubetu], s.ShubetuDetailName))
 			} else {
 				shokushu = append(shokushu, fmt.Sprintf("*%s*", s.ShubetuDetailName))
 			}
 		}
 		shokushuStr := strings.Join(shokushu, ", ")
 		itemNum := start + idx + 1
-		itemContent := fmt.Sprintf("**%d. %s** (%s)\n⭐ **%d** / 📊 **%d** / %s", itemNum, g.Gamename, shokushuStr, g.Median, g.CountAll, g.SellDay)
+		itemContent := fmt.Sprintf("**%d. %s** ( %s )\n⭐ **%d** / 📊 **%d** / %s", itemNum, g.Gamename, shokushuStr, g.Median, g.CountAll, g.SellDay)
 
 		thumbnailURL := ""
 		if strings.TrimSpace(g.DMM) != "" {
