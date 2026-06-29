@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"kurohelper/internal/cache"
+	usercommands "kurohelper/internal/commands/user"
 	kurohelperrerrors "kurohelper/internal/errors"
 	"kurohelper/internal/executor"
 	"kurohelper/internal/store"
@@ -124,7 +125,13 @@ func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 		case switchMode{searchGameVndbRouteKey, utils.BackToHomeBehavior}:
 			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
 		case switchMode{searchGameErogsRouteKey, utils.BackToHomeBehavior}:
-			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, buildSearchGameComponents)
+			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+				statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+				if err != nil {
+					return nil, err
+				}
+				return buildSearchGameComponents(cacheValue, page, cacheID, statusMap, inWishMap)
+			})
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 		}
@@ -164,7 +171,13 @@ func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate)
 			}
 		}
 		return erogs.SearchGameListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
-	}, buildSearchGameComponents)
+	}, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		if err != nil {
+			return nil, err
+		}
+		return buildSearchGameComponents(cacheValue, page, cacheID, statusMap, inWishMap)
+	})
 }
 
 // 查詢遊戲列表(有CID版本)
@@ -174,7 +187,13 @@ func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
 	}
-	executor.ChangePage(s, i, pageCID, cache.ErogsGameListStore, buildSearchGameComponents)
+	executor.ChangePage(s, i, pageCID, cache.ErogsGameListStore, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
+		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		if err != nil {
+			return nil, err
+		}
+		return buildSearchGameComponents(cacheValue, page, cacheID, statusMap, inWishMap)
+	})
 }
 
 // 查詢單一遊戲資料(有CID版本，從選單選擇)
@@ -235,12 +254,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		if item.GameErogsID != res.ID {
 			continue
 		}
-		if item.Status == 1 {
-			userData.WriteString("✅")
-		}
-		if item.WishListMark {
-			userData.WriteString("❤️")
-		}
+		userData.WriteString(usercommands.FormatGameFlags(item.Status, item.WishListMark))
 		break
 	}
 
@@ -484,14 +498,20 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 }
 
 // 產生查詢遊戲列表的Components
-func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID string) ([]discordgo.MessageComponent, error) {
+func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID string, statusMap map[int]kurohelperdb.UserGameStatus, inWishMap map[int]struct{}) ([]discordgo.MessageComponent, error) {
+	if statusMap == nil {
+		statusMap = make(map[int]kurohelperdb.UserGameStatus)
+	}
+	if inWishMap == nil {
+		inWishMap = make(map[int]struct{})
+	}
 	totalItems := len(res)
 	totalPages := (totalItems + searchGameListItemsPerPage - 1) / searchGameListItemsPerPage
 
 	divider := true
 	containerComponents := []discordgo.MessageComponent{
 		discordgo.TextDisplay{
-			Content: fmt.Sprintf("# 遊戲搜尋\n搜尋筆數: **%d**\n⭐: 批評空間分數 📊: 投票人數 ⏱️: 遊玩時數 🥰: 開始理解遊戲樂趣時數", totalItems),
+			Content: fmt.Sprintf("# 遊戲搜尋\n搜尋筆數: **%d**\n✅: 已完成 🎮: 遊玩中 ⏸️: 擱置 🗑️: 棄坑 ❤️: 願望清單\n⭐: 批評空間分數 📊: 投票人數 ⏱️: 遊玩時數 🥰: 開始理解遊戲樂趣時數", totalItems),
 		},
 		discordgo.Separator{Divider: &divider},
 	}
@@ -506,7 +526,10 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 	// 產生遊戲列表組件
 	for idx, r := range pagedResults {
 		itemNum := start + idx + 1
-		itemContent := fmt.Sprintf("**%d. %s (%s)**\n⭐ **%s** / 📊 **%s**", itemNum, r.Name, r.Category, r.Median, r.TokutenCount)
+		status := statusMap[r.ID]
+		_, inWish := inWishMap[r.ID]
+		statusPrefix := usercommands.FormatGameFlags(status, inWish)
+		itemContent := statusPrefix + fmt.Sprintf("**%d. %s (%s)**\n⭐ **%s** / 📊 **%s**", itemNum, r.Name, r.Category, r.Median, r.TokutenCount)
 		if strings.TrimSpace(r.TotalPlayTimeMedian) != "" {
 			itemContent += fmt.Sprintf(" / ⏱️ **%s**", r.TotalPlayTimeMedian)
 		}
