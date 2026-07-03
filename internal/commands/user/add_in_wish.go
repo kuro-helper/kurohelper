@@ -97,7 +97,7 @@ func (a *AddInWish) HandleComponent(s *discordgo.Session, i *discordgo.Interacti
 				if strings.TrimSpace(res.DMM) == "" {
 					image = ""
 				}
-				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, image, res.BrandID); err != nil {
+				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, image, res.BrandID, res.Model); err != nil {
 					return err
 				}
 

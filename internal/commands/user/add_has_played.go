@@ -119,7 +119,7 @@ func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 				if strings.TrimSpace(res.DMM) == "" {
 					image = ""
 				}
-				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, image, res.BrandID); err != nil {
+				if _, err := kurohelperdb.EnsureGameErogs(tx, res.ID, res.Gamename, image, res.BrandID, res.Model); err != nil {
 					return err
 				}
 
