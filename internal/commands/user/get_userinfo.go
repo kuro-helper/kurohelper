@@ -300,14 +300,15 @@ func getUserGameRecordTime(ug *kurohelperdb.UserGame) string {
 }
 
 func formatUserGameLine(index int, ug *kurohelperdb.UserGame) string {
-	prefix := utils.FormatGameFlags(ug.Status, ug.WishListMark)
-	if prefix == "" {
-		prefix = "▫️"
+	flags := utils.FormatGameFlags(ug.Status, ug.WishListMark)
+	line := fmt.Sprintf("%d. **%s**", index, ug.GameErogs.Name)
+	if flags != "" {
+		line += " **|** " + flags
 	}
 
 	t := getUserGameRecordTime(ug)
 	if t != "" {
-		return fmt.Sprintf("%d. %s **%s**  ⏱️%s", index, prefix, ug.GameErogs.Name, t)
+		line += "  ⏱️" + t
 	}
-	return fmt.Sprintf("%d. %s **%s**", index, prefix, ug.GameErogs.Name)
+	return line
 }

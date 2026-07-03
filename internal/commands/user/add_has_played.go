@@ -103,7 +103,10 @@ func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 		if strings.TrimSpace(userID) != "" && strings.TrimSpace(userName) != "" {
 			err := kurohelperdb.Dbs.Transaction(func(tx *gorm.DB) error {
 				// 1. 確保 User 存在
-				user, err := kurohelperdb.EnsureDiscordUser(tx, userID, userName)
+				if err := kurohelperdb.EnsureDiscordUser(tx, userID, userName); err != nil {
+					return err
+				}
+				user, err := kurohelperdb.GetUserByDiscordID(tx, userID)
 				if err != nil {
 					return err
 				}

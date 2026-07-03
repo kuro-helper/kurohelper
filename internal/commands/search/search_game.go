@@ -529,7 +529,7 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 		_, inWish := inWishMap[r.ID]
 		statusSuffix := utils.FormatGameFlags(status, inWish)
 		if statusSuffix != "" {
-			statusSuffix = " " + statusSuffix
+			statusSuffix = " **|** " + statusSuffix
 		}
 		itemContent := fmt.Sprintf("**%d. %s%s (%s)**\n⭐ **%s** / 📊 **%s**", itemNum, r.Name, statusSuffix, r.Category, r.Median, r.TokutenCount)
 		if strings.TrimSpace(r.TotalPlayTimeMedian) != "" {

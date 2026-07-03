@@ -571,7 +571,7 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 		if statusSuffix != "" {
 			statusSuffix = " " + statusSuffix
 		}
-		itemContent := fmt.Sprintf("**%d. %s%s**\n⭐**%d/%d** / 📊**%d**/📅**%s** (%s)", itemNum, item.GameName, statusSuffix, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
+		itemContent := fmt.Sprintf("**%d. %s%s**\n⭐**%d/%d** / 📊**%d** / 📅**%s** (%s)", itemNum, item.GameName, statusSuffix, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
 
 		thumbnailURL := ""
 		if strings.TrimSpace(item.DMM) != "" {
