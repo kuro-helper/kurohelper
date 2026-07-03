@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"kurohelper/internal/cache"
-	usercommands "kurohelper/internal/commands/user"
 	kurohelperrerrors "kurohelper/internal/errors"
 	"kurohelper/internal/executor"
 	common "kurohelper/internal/executor"
@@ -116,7 +115,7 @@ func (sb *SearchBrand) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandCommandName, searchBrandErogsRouteKey)
 		case switchMode{searchBrandErogsRouteKey, utils.BackToHomeBehavior}:
 			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-				statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+				statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 				if err != nil {
 					return nil, err
 				}
@@ -497,7 +496,7 @@ func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		return erogs.SearchBrandByKeyword([]string{keyword})
 	}, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +511,7 @@ func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 	common.ChangePage(s, i, pageCID, cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 		if err != nil {
 			return nil, err
 		}
@@ -568,7 +567,7 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 		itemNum := start + idx + 1
 		status := statusMap[item.ID]
 		_, inWish := inWishMap[item.ID]
-		statusSuffix := usercommands.FormatGameFlags(status, inWish)
+		statusSuffix := utils.FormatGameFlags(status, inWish)
 		if statusSuffix != "" {
 			statusSuffix = " " + statusSuffix
 		}

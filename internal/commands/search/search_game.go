@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"kurohelper/internal/cache"
-	usercommands "kurohelper/internal/commands/user"
 	kurohelperrerrors "kurohelper/internal/errors"
 	"kurohelper/internal/executor"
 	"kurohelper/internal/store"
@@ -126,7 +125,7 @@ func (sg *SearchGame) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.VndbGameListStore, buildVndbSearchGameComponents)
 		case switchMode{searchGameErogsRouteKey, utils.BackToHomeBehavior}:
 			executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsGameListStore, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-				statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+				statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 				if err != nil {
 					return nil, err
 				}
@@ -172,7 +171,7 @@ func erogsSearchGameListV2(s *discordgo.Session, i *discordgo.InteractionCreate)
 		}
 		return erogs.SearchGameListByKeyword([]string{keyword, kurohelperservice.ZhTwToJp(keyword)})
 	}, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +187,7 @@ func erogsSearchGameListWithCIDV2(s *discordgo.Session, i *discordgo.Interaction
 		return
 	}
 	executor.ChangePage(s, i, pageCID, cache.ErogsGameListStore, func(cacheValue []erogs.GameList, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		statusMap, inWishMap, err := usercommands.LoadGameStateMaps(utils.GetUserID(i))
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +253,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		if item.GameErogsID != res.ID {
 			continue
 		}
-		userData.WriteString(usercommands.FormatGameFlags(item.Status, item.WishListMark))
+		userData.WriteString(utils.FormatGameFlags(item.Status, item.WishListMark))
 		break
 	}
 
@@ -528,7 +527,7 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 		itemNum := start + idx + 1
 		status := statusMap[r.ID]
 		_, inWish := inWishMap[r.ID]
-		statusSuffix := usercommands.FormatGameFlags(status, inWish)
+		statusSuffix := utils.FormatGameFlags(status, inWish)
 		if statusSuffix != "" {
 			statusSuffix = " " + statusSuffix
 		}
