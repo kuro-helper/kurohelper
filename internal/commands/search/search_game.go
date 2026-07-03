@@ -478,7 +478,7 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 
 	containerComponents := []discordgo.MessageComponent{
 		discordgo.TextDisplay{
-			Content: fmt.Sprintf("# %s**%s(%s)**", userData.String(), res.Gamename, res.SellDay),
+			Content: fmt.Sprintf("# **%s(%s)**%s", res.Gamename, res.SellDay, userData.String()),
 		},
 		discordgo.Separator{Divider: &divider},
 		section,
@@ -528,8 +528,11 @@ func buildSearchGameComponents(res []erogs.GameList, currentPage int, cacheID st
 		itemNum := start + idx + 1
 		status := statusMap[r.ID]
 		_, inWish := inWishMap[r.ID]
-		statusPrefix := usercommands.FormatGameFlags(status, inWish)
-		itemContent := statusPrefix + fmt.Sprintf("**%d. %s (%s)**\n⭐ **%s** / 📊 **%s**", itemNum, r.Name, r.Category, r.Median, r.TokutenCount)
+		statusSuffix := usercommands.FormatGameFlags(status, inWish)
+		if statusSuffix != "" {
+			statusSuffix = " " + statusSuffix
+		}
+		itemContent := fmt.Sprintf("**%d. %s%s (%s)**\n⭐ **%s** / 📊 **%s**", itemNum, r.Name, statusSuffix, r.Category, r.Median, r.TokutenCount)
 		if strings.TrimSpace(r.TotalPlayTimeMedian) != "" {
 			itemContent += fmt.Sprintf(" / ⏱️ **%s**", r.TotalPlayTimeMedian)
 		}

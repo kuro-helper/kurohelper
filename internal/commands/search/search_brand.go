@@ -568,8 +568,11 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 		itemNum := start + idx + 1
 		status := statusMap[item.ID]
 		_, inWish := inWishMap[item.ID]
-		prefix := usercommands.FormatGameFlags(status, inWish)
-		itemContent := prefix + fmt.Sprintf("**%d. %s**\n⭐**%d/%d** / 📊**%d**/📅**%s** (%s)", itemNum, item.GameName, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
+		statusSuffix := usercommands.FormatGameFlags(status, inWish)
+		if statusSuffix != "" {
+			statusSuffix = " " + statusSuffix
+		}
+		itemContent := fmt.Sprintf("**%d. %s%s**\n⭐**%d/%d** / 📊**%d**/📅**%s** (%s)", itemNum, item.GameName, statusSuffix, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
 
 		thumbnailURL := ""
 		if strings.TrimSpace(item.DMM) != "" {

@@ -44,19 +44,19 @@ func LoadGameStateMaps(discordID string) (statusMap map[int]kurohelperdb.UserGam
 
 // FormatGameFlags 將遊玩狀態與願望清單轉換成 Discord 顯示圖示
 func FormatGameFlags(status kurohelperdb.UserGameStatus, inWish bool) string {
-	var flags strings.Builder
+	flags := make([]string, 0, 2)
 	switch status {
 	case kurohelperdb.UserGameStatusFinished:
-		flags.WriteString("✅")
+		flags = append(flags, "✅")
 	case kurohelperdb.UserGameStatusPlaying:
-		flags.WriteString("🎮")
+		flags = append(flags, "🎮")
 	case kurohelperdb.UserGameStatusStalled:
-		flags.WriteString("⏸️")
+		flags = append(flags, "⏸️")
 	case kurohelperdb.UserGameStatusDropped:
-		flags.WriteString("🗑️")
+		flags = append(flags, "🗑️")
 	}
 	if inWish {
-		flags.WriteString("❤️")
+		flags = append(flags, "❤️")
 	}
-	return flags.String()
+	return strings.Join(flags, " ")
 }
