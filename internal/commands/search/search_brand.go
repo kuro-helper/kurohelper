@@ -20,7 +20,6 @@ import (
 	"kurohelperservice/provider/vndb"
 
 	"github.com/bwmarrin/discordgo"
-	"gorm.io/gorm"
 )
 
 const (
@@ -116,8 +115,11 @@ func (sb *SearchBrand) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 			erogsSearchGameWithSelectMenuCIDV2(s, i, cid, searchBrandCommandName, searchBrandErogsRouteKey)
 		case switchMode{searchBrandErogsRouteKey, utils.BackToHomeBehavior}:
 			common.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-				hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-				return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
+				statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
+				if err != nil {
+					return nil, err
+				}
+				return buildSearchBrandErogsComponents(cacheValue, page, cacheID, statusMap, inWishMap)
 			})
 		default:
 			utils.HandleErrorV2(kurohelperrerrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
@@ -494,8 +496,11 @@ func erogsSearchBrandV2(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		return erogs.SearchBrandByKeyword([]string{keyword})
 	}, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
+		if err != nil {
+			return nil, err
+		}
+		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, statusMap, inWishMap)
 	})
 }
 
@@ -506,40 +511,17 @@ func erogsSearchBrandWithCIDV2(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 	common.ChangePage(s, i, pageCID, cache.ErogsBrandStore, func(cacheValue *erogs.Brand, page int, cacheID string) ([]discordgo.MessageComponent, error) {
-		hasPlayedMap, inWishMap := getErogsUserPlayWishMaps(i)
-		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, hasPlayedMap, inWishMap)
+		statusMap, inWishMap, err := utils.LoadGameStateMaps(utils.GetUserID(i))
+		if err != nil {
+			return nil, err
+		}
+		return buildSearchBrandErogsComponents(cacheValue, page, cacheID, statusMap, inWishMap)
 	})
 }
 
-// getErogsUserPlayWishMaps 依互動取得使用者的已玩／願望清單對應的 GameErogsID set，供品牌頁顯示 ✅／❤️。
-func getErogsUserPlayWishMaps(i *discordgo.InteractionCreate) (hasPlayedMap, inWishMap map[int]struct{}) {
-	hasPlayedMap = make(map[int]struct{})
-	inWishMap = make(map[int]struct{})
-	discordID := utils.GetUserID(i)
-	if strings.TrimSpace(discordID) == "" {
-		return hasPlayedMap, inWishMap
-	}
-	if _, ok := store.UserStore[discordID]; !ok {
-		return hasPlayedMap, inWishMap
-	}
-	userGames, err := kurohelperdb.GetUserGameByDiscordID(kurohelperdb.Dbs, discordID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return hasPlayedMap, inWishMap
-	}
-	for _, item := range userGames {
-		if item.Status == 1 {
-			hasPlayedMap[item.GameErogsID] = struct{}{}
-		}
-		if item.WishListMark {
-			inWishMap[item.GameErogsID] = struct{}{}
-		}
-	}
-	return hasPlayedMap, inWishMap
-}
-
-func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID string, hasPlayedMap, inWishMap map[int]struct{}) ([]discordgo.MessageComponent, error) {
-	if hasPlayedMap == nil {
-		hasPlayedMap = make(map[int]struct{})
+func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID string, statusMap map[int]kurohelperdb.UserGameStatus, inWishMap map[int]struct{}) ([]discordgo.MessageComponent, error) {
+	if statusMap == nil {
+		statusMap = make(map[int]kurohelperdb.UserGameStatus)
 	}
 	if inWishMap == nil {
 		inWishMap = make(map[int]struct{})
@@ -563,7 +545,7 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 	if linkLine != "" {
 		linkSection = linkLine + "\n"
 	}
-	headerContent := fmt.Sprintf("# %s\n%s遊戲筆數: **%d**\n✅: 已玩 ❤️: 願望清單\n⭐: 批評空間分數(中位數/樣本差) 📊:投票人數 📅: 發售日期", brandTitle, linkSection, totalItems)
+	headerContent := fmt.Sprintf("# %s\n%s遊戲筆數: **%d**\n✅: 已完成 🎮: 遊玩中 ⏸️: 擱置 🗑️: 棄坑 ❤️: 願望清單\n⭐: 批評空間分數(中位數/樣本差) 📊:投票人數 📅: 發售日期", brandTitle, linkSection, totalItems)
 
 	divider := true
 	containerComponents := []discordgo.MessageComponent{
@@ -583,14 +565,13 @@ func buildSearchBrandErogsComponents(res *erogs.Brand, currentPage int, cacheID 
 	// 產生遊戲組件
 	for idx, item := range pagedResults {
 		itemNum := start + idx + 1
-		var prefix string
-		if _, exists := hasPlayedMap[item.ID]; exists {
-			prefix += "✅"
+		status := statusMap[item.ID]
+		_, inWish := inWishMap[item.ID]
+		statusSuffix := utils.FormatGameFlags(status, inWish)
+		if statusSuffix != "" {
+			statusSuffix = " " + statusSuffix
 		}
-		if _, exists := inWishMap[item.ID]; exists {
-			prefix += "❤️"
-		}
-		itemContent := prefix + fmt.Sprintf("**%d. %s**\n⭐**%d/%d** / 📊**%d**/📅**%s** (%s)", itemNum, item.GameName, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
+		itemContent := fmt.Sprintf("**%d. %s%s**\n⭐**%d/%d** / 📊**%d** / 📅**%s** (%s)", itemNum, item.GameName, statusSuffix, item.Median, item.Stdev, item.Count2, item.SellDay, item.Model)
 
 		thumbnailURL := ""
 		if strings.TrimSpace(item.DMM) != "" {
