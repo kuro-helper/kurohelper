@@ -58,7 +58,7 @@ var commandMap = map[string]SlashCommand{
 	// vndb專用指令
 	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令
-	"運勢": &commands.Fortune{},
+	"簽到": &commands.CheckIn{},
 	"幫助": &commands.Helper{},
 }
 
