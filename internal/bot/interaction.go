@@ -55,10 +55,10 @@ var commandMap = map[string]SlashCommand{
 	"加收藏":       &user.AddInWish{},
 	"刪除使用者遊戲資料": &user.RemoveUserGame{},
 	"帳號設定":      &user.Preference{},
+	"簽到":        &user.CheckIn{},
 	// vndb專用指令
 	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令
-	"簽到": &commands.CheckIn{},
 	"幫助": &commands.Helper{},
 }
 
