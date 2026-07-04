@@ -2,6 +2,8 @@ package commands
 
 import (
 	"kurohelper/internal/utils"
+	kurohelperdb "kurohelperservice/db"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -16,6 +18,12 @@ func (h *Helper) Definition() *discordgo.ApplicationCommand {
 }
 
 func (h *Helper) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	serverLink, err := kurohelperdb.GetAppConfigByKey(kurohelperdb.Dbs, "SERVER_LINK")
+	if err != nil {
+		slog.Warn(err.Error())
+		serverLink.ConfigValue = "目前群組連結不公開"
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title: "幫助",
 		Color: 0xF19483,
@@ -32,7 +40,7 @@ func (h *Helper) Handler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 			{
 				Name:   "聯繫我們/加入群組",
-				Value:  "https://discord.gg/6rkrm7tsXr",
+				Value:  serverLink.ConfigValue,
 				Inline: true,
 			},
 		},
