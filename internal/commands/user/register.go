@@ -34,7 +34,11 @@ func (r *Register) Handler(s *discordgo.Session, i *discordgo.InteractionCreate)
 	})
 
 	discordID := utils.GetUserID(i)
-	user, err := kurohelperdb.EnsureDiscordUser(kurohelperdb.Dbs, discordID, utils.GetUsername(i))
+	if err := kurohelperdb.EnsureDiscordUser(kurohelperdb.Dbs, discordID, utils.GetUsername(i)); err != nil {
+		utils.HandleError(err, s, i)
+		return
+	}
+	user, err := kurohelperdb.GetUserByDiscordID(kurohelperdb.Dbs, discordID)
 	if err != nil {
 		utils.HandleError(err, s, i)
 		return
