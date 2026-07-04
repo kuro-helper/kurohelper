@@ -157,7 +157,10 @@ func dbInit() {
 		slog.Error(err.Error())
 		os.Exit(1)
 	}
-	db.Migration(db.Dbs) // 選填
+	if err := db.Migration(db.Dbs); err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
 }
 
 // ymgal init
