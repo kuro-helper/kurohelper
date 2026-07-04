@@ -49,8 +49,8 @@ var commandMap = map[string]SlashCommand{
 	"隨機遊戲": &random.RandomGame{},
 	"隨機角色": &random.RandomCharacter{},
 	// 使用者相關指令
-	"個人資料": &user.GetUserinfo{},
-	// "註冊帳號":      &user.Register{},
+	"個人資料":      &user.GetUserinfo{},
+	"註冊帳號":      &user.Register{},
 	"加已玩":       &user.AddHasPlayed{},
 	"加收藏":       &user.AddInWish{},
 	"刪除使用者遊戲資料": &user.RemoveUserGame{},
