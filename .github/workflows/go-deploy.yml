@@ -62,30 +62,33 @@ jobs:
           name: linux-binary
           path: dist
 
-      - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
-
       - name: Upload binary to VPS
-        env:
-          SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_SSH_PASSWORD }}
+          source: "dist/*"
+          target: "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/"
+          strip-components: 0
+
+      - name: Set executable permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_SSH_PASSWORD }}
+          script: |
+            output_name=$(ls -1 "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/" | head -n 1)
+            if [ -n "$output_name" ]; then
+              chmod u+x "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/$output_name"
+              echo "已設定執行權限：$output_name"
+            else
+              echo "::error::找不到部署目錄下的檔案"
+              exit 1
+            fi
+
+      - name: Show deployment info
         run: |
-          set -euo pipefail
-          output_name="$(ls -1 dist | head -n 1)"
-          if [ -z "$output_name" ]; then
-            echo "::error::找不到編譯產物"
-            exit 1
-          fi
-
-          deploy_base="${VPS_DEPLOY_BASE%/}"
-          target_path="${deploy_base}/${REPO_NAME}"
-
-          ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-          remote="${VPS_USERNAME}@${VPS_IP}"
-
           echo "部署 ref：${{ github.ref }} (${{ github.sha }})"
-          echo "上傳執行檔：$output_name"
-
-          sshpass -e scp $ssh_opts "dist/$output_name" "$remote:$target_path/"
-          sshpass -e ssh $ssh_opts "$remote" "chmod u+x '$target_path/$output_name'"
-
-          echo "已部署 $output_name ($REPO_NAME)"
+          echo "已部署至 ${{ env.REPO_NAME }}"
