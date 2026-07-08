@@ -55,6 +55,7 @@ jobs:
       VPS_SSH_PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
       VPS_DEPLOY_BASE: ${{ secrets.VPS_DEPLOY_BASE }}
       REPO_NAME: ${{ github.event.repository.name }}
+      BINARY_NAME: ${{ format('{0}-linux-amd64-{1}', github.event.repository.name, github.ref_name) }}
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -70,7 +71,7 @@ jobs:
           password: ${{ secrets.VPS_SSH_PASSWORD }}
           source: "dist/*"
           target: "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/"
-          strip-components: 0
+          strip_components: 1
 
       - name: Set executable permissions
         uses: appleboy/ssh-action@v1.0.3
@@ -79,14 +80,8 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_SSH_PASSWORD }}
           script: |
-            output_name=$(ls -1 "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/" | head -n 1)
-            if [ -n "$output_name" ]; then
-              chmod u+x "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/$output_name"
-              echo "已設定執行權限：$output_name"
-            else
-              echo "::error::找不到部署目錄下的檔案"
-              exit 1
-            fi
+            chmod u+x "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/${{ env.BINARY_NAME }}"
+            echo "已設定執行權限：${{ env.BINARY_NAME }}"
 
       - name: Show deployment info
         run: |
