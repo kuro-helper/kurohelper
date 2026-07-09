@@ -14,76 +14,11 @@ permissions:
   actions: read
 
 jobs:
-  preflight:
-    runs-on: ubuntu-latest
-    env:
-      VPS_IP: ${{ secrets.VPS_IP }}
-      VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
-      VPS_SSH_PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
-      VPS_DEPLOY_BASE: ${{ secrets.VPS_DEPLOY_BASE }}
-    steps:
-      - name: Check Secrets
-        run: |
-          set -euo pipefail
-          missing=0
-          for name in VPS_IP VPS_USERNAME VPS_SSH_PASSWORD VPS_DEPLOY_BASE; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::缺少必要的 Secret：$name"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-  build:
-    needs: preflight
+  go-deploy:
     permissions:
       contents: read
       actions: write
-    uses: kuro-helper/.github/.github/workflows/go-build.yml@main
+    uses: kuro-helper/.github/.github/workflows/go-deploy.yml@main
     with:
-      use_kurohelperservice: ${{ inputs.kurohelperservice_ref }}
-      linux_binary_name: ${{ format('{0}-linux-amd64-{1}', github.event.repository.name, github.ref_name) }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    env:
-      VPS_IP: ${{ secrets.VPS_IP }}
-      VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
-      VPS_SSH_PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
-      VPS_DEPLOY_BASE: ${{ secrets.VPS_DEPLOY_BASE }}
-      REPO_NAME: ${{ github.event.repository.name }}
-      BINARY_NAME: ${{ format('{0}-linux-amd64-{1}', github.event.repository.name, github.ref_name) }}
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-binary
-          path: dist
-
-      - name: Upload binary to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USERNAME }}
-          password: ${{ secrets.VPS_SSH_PASSWORD }}
-          source: "dist/*"
-          target: "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/"
-          strip_components: 1
-
-      - name: Set executable permissions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USERNAME }}
-          password: ${{ secrets.VPS_SSH_PASSWORD }}
-          script: |
-            chmod u+x "${{ secrets.VPS_DEPLOY_BASE }}/${{ env.REPO_NAME }}/${{ env.BINARY_NAME }}"
-            echo "已設定執行權限：${{ env.BINARY_NAME }}"
-
-      - name: Show deployment info
-        run: |
-          echo "部署 ref：${{ github.ref }} (${{ github.sha }})"
-          echo "已部署至 ${{ env.REPO_NAME }}"
+      kurohelperservice_ref: ${{ inputs.kurohelperservice_ref }}
+    secrets: inherit
