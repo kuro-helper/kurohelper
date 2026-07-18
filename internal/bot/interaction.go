@@ -60,6 +60,7 @@ var commandMap = map[string]SlashCommand{
 	"vndb統計資料": &vndb.VNDBStats{},
 	// 未分類指令
 	"幫助": &commands.Helper{},
+	"公告": &commands.Announcement{},
 }
 
 // 註冊命令
