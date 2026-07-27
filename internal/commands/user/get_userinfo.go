@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
@@ -15,8 +14,6 @@ import (
 
 	kurohelperdb "kurohelperservice/db"
 )
-
-var taipeiTimeZone = time.FixedZone("Asia/Taipei", 8*60*60)
 
 type UserInfo struct {
 	User            kurohelperdb.User
@@ -268,7 +265,7 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("**%s 的個人資料**", user.Name),
 		Color:       0xB481BB,
-		Description: fmt.Sprintf("資料建檔日期: %s", user.CreatedAt.In(taipeiTimeZone).Format("2006-01-02")),
+		Description: fmt.Sprintf("資料建檔日期: %s", user.CreatedAt.Local().Format("2006-01-02")),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: avatar,
 		},
@@ -297,7 +294,7 @@ func (g *GetUserinfo) HandleComponent(s *discordgo.Session, i *discordgo.Interac
 
 func getUserGameRecordTime(ug *kurohelperdb.UserGame) string {
 	if ug.FinishedDate != nil {
-		return ug.FinishedDate.In(taipeiTimeZone).Format("2006-01-02")
+		return ug.FinishedDate.Local().Format("2006-01-02")
 	}
 	return ""
 }
