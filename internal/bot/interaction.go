@@ -63,13 +63,37 @@ var commandMap = map[string]SlashCommand{
 	"公告": &commands.Announcement{},
 }
 
+var retiredCommandNames = map[string]struct{}{
+	"小黑":      {},
+	"newchat": {},
+}
+
 // 註冊命令
 func RegisterCommand(s *discordgo.Session) {
+	removeRetiredCommands(s)
 	for n, cmd := range commandMap {
 		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd.Definition())
 		if err != nil {
 			slog.Error(fmt.Sprintf("register %s command failed: %s", n, err.Error()))
 		}
+	}
+}
+
+func removeRetiredCommands(s *discordgo.Session) {
+	commands, err := s.ApplicationCommands(s.State.User.ID, "")
+	if err != nil {
+		slog.Error("list retired Kuro slash commands failed", "error", err)
+		return
+	}
+	for _, command := range commands {
+		if _, retired := retiredCommandNames[command.Name]; !retired {
+			continue
+		}
+		if err := s.ApplicationCommandDelete(s.State.User.ID, "", command.ID); err != nil {
+			slog.Error("delete retired Kuro slash command failed", "command", command.Name, "error", err)
+			continue
+		}
+		slog.Info("retired Kuro slash command removed", "command", command.Name)
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -15,10 +16,12 @@ import (
 
 	"kurohelper/internal/bot"
 	"kurohelper/internal/cache"
+	botkuro "kurohelper/internal/kuro"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 	service "kurohelperservice"
 	"kurohelperservice/db"
+	servicekuro "kurohelperservice/kuro"
 	"kurohelperservice/provider/erogs"
 	"kurohelperservice/provider/seiya"
 	"kurohelperservice/provider/ymgal"
@@ -112,6 +115,32 @@ func main() {
 	stopChan := make(chan struct{})
 	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("COMMAND_CLEAN_CACHE_JOB_HOURS", 12)), stopChan)
 
+	runtimeContext, stopRuntime := context.WithCancel(context.Background())
+	defer stopRuntime()
+	runtimeSecret := strings.TrimSpace(os.Getenv("KURO_RUNTIME_SECRET"))
+	if runtimeSecret != "" {
+		runtimeClient, runtimeErr := servicekuro.NewClient(servicekuro.Config{
+			URL:            envOrDefault("KURO_RUNTIME_URL", "ws://127.0.0.1:2334"),
+			Secret:         runtimeSecret,
+			RequestTimeout: time.Duration(utils.GetEnvInt("KURO_REQUEST_TIMEOUT_SECONDS", 180)) * time.Second,
+		})
+		if runtimeErr != nil {
+			slog.Error("Kuro AI Runtime 設定錯誤", "error", runtimeErr)
+			os.Exit(1)
+		}
+		botkuro.Init(runtimeClient, botkuro.Settings{
+			TriggerPrefix:      envOrDefault("KURO_TRIGGER_PREFIX", "小黑"),
+			ChannelIDs:         servicekuro.ParseIDSet(os.Getenv("KURO_CHANNEL_IDS")),
+			CommandUserIDs:     servicekuro.ParseIDSet(os.Getenv("KURO_COMMAND_USER_IDS")),
+			RecentMessageLimit: utils.GetEnvInt("KURO_RECENT_MESSAGE_LIMIT", 15),
+			RecentContextChars: utils.GetEnvInt("KURO_RECENT_CONTEXT_CHARS", 6000),
+		})
+		runtimeClient.Start(runtimeContext)
+		defer runtimeClient.Close()
+	} else {
+		slog.Warn("KURO_RUNTIME_SECRET 未設定，Kuro 對話功能不會啟用")
+	}
+
 	token := os.Getenv("BOT_TOKEN")
 	kuroHelper, err := discordgo.New("Bot " + token)
 	if err != nil {
@@ -125,6 +154,7 @@ func main() {
 
 	kuroHelper.AddHandler(bot.Ready)
 	kuroHelper.AddHandler(bot.OnInteraction)
+	kuroHelper.AddHandler(bot.OnMessageCreate)
 
 	err = kuroHelper.Open() // websocket connect
 	if err != nil {
@@ -141,6 +171,13 @@ func main() {
 	close(stopChan)
 
 	kuroHelper.Close() // websocket disconnect
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 // db init
