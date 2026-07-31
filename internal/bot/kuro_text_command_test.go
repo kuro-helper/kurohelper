@@ -13,6 +13,7 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		"/newchat",
 		"/status",
 		"/memory-list",
+		"/memory-info",
 		"/memory-trash",
 		"/forget",
 		"/restore",
@@ -83,6 +84,36 @@ func TestFormatKuroMemoriesRejectsOutOfRangePage(t *testing.T) {
 	formatted := formatKuroMemories(servicekuro.MemoryResponse{Count: 12}, true, 4, 5)
 	if !strings.Contains(formatted, "頁碼超出範圍") || !strings.Contains(formatted, "3 頁") {
 		t.Fatalf("unexpected out-of-range message: %s", formatted)
+	}
+}
+
+func TestFormatKuroMemoryDetail(t *testing.T) {
+	formatted := formatKuroMemoryDetail(servicekuro.MemoryResponse{
+		Status: "found",
+		Memory: &servicekuro.Memory{
+			ID: "abcdef12-3456", Key: "event.key", Value: "一段重要事件",
+			Category: "conversation_event", Status: "active",
+			Importance: 0.9, Confidence: 0.95, Scope: "channel", ScopeID: "channel-1",
+			CreatedAt:      "2026-07-30T05:01:31.082197+00:00",
+			UpdatedAt:      "2026-07-30T05:01:31.082197+00:00",
+			LastAccessedAt: "2026-07-31T03:31:35.852803+00:00", AccessCount: 17,
+			SourceChannelID: "kurohelper:channel-1", SourceRequestID: "request-1",
+			Participants: []servicekuro.MemoryParticipant{{DisplayName: "肉圓", Role: "speaker"}},
+		},
+	})
+	for _, expected := range []string{"abcdef12-3456", "一段重要事件", "0.90／0.95", "肉圓", "17 次", "request-1"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatted detail is missing %q: %s", expected, formatted)
+		}
+	}
+}
+
+func TestFormatKuroMemoryDetailHandlesLookupErrors(t *testing.T) {
+	if !strings.Contains(formatKuroMemoryDetail(servicekuro.MemoryResponse{Status: "ambiguous"}), "多條") {
+		t.Fatal("ambiguous lookup should ask for a longer ID")
+	}
+	if !strings.Contains(formatKuroMemoryDetail(servicekuro.MemoryResponse{Status: "not_found"}), "找不到") {
+		t.Fatal("missing memory should be reported")
 	}
 }
 

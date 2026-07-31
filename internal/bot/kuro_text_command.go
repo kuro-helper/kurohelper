@@ -22,6 +22,7 @@ const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /status — 查看 AI Runtime 狀態
 小黑 /ai-stats [24h|7d|30d] — 查看 AI 延遲、Token 與費用統計
 小黑 /memory-list [頁碼] — 分頁列出有效記憶
+小黑 /memory-info <記憶ID> — 查看單筆記憶的詳細資訊
 小黑 /memory-trash [頁碼] — 分頁列出記憶垃圾桶
 小黑 /forget <記憶ID> — 將記憶移入垃圾桶
 小黑 /restore <記憶ID> — 復原記憶
@@ -121,6 +122,19 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		result, err = client.ListMemories(ctx, status, kuroMemoryPageSize, (page-1)*kuroMemoryPageSize)
 		if err == nil {
 			content = formatKuroMemories(result, status == "deleted", page, kuroMemoryPageSize)
+		}
+	case "memory-info":
+		if len(command.Args) != 1 || len(command.Args[0]) < 6 {
+			content = "用法：小黑 /memory-info <記憶ID>"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.GetMemory(ctx, command.Args[0])
+		if err == nil {
+			content = formatKuroMemoryDetail(result)
+			if result.Status == "found" && result.Memory != nil {
+				content = appendKuroMemorySource(content, loadKuroMemorySource(session, result.Memory))
+			}
 		}
 	case "forget", "restore":
 		if len(command.Args) != 1 || len(command.Args[0]) < 6 {
@@ -326,6 +340,86 @@ func formatKuroAIStats(stats db.KuroAIStats, providers []db.KuroAIProviderStats,
 		))
 	}
 	return truncateKuroText(result+"\n"+strings.Join(lines, "\n"), 1900)
+}
+
+func formatKuroMemoryDetail(result servicekuro.MemoryResponse) string {
+	if result.Status == "ambiguous" {
+		return "ID 前綴符合多條記憶，請輸入更多字元。"
+	}
+	if result.Status == "unavailable" || result.Status == "disabled" {
+		return "記憶服務目前不可用。"
+	}
+	if result.Status != "found" || result.Memory == nil {
+		return "找不到相符的記憶。"
+	}
+
+	memory := result.Memory
+	statusLabels := map[string]string{
+		"active":     "有效",
+		"deleted":    "垃圾桶",
+		"forgotten":  "已遺忘",
+		"superseded": "已被新版取代",
+	}
+	status := statusLabels[memory.Status]
+	if status == "" {
+		status = memory.Status
+	}
+	scope := "頻道"
+	if memory.Scope == "global" {
+		scope = "跨頻道"
+	}
+	participantNames := make([]string, 0, len(memory.Participants))
+	for _, participant := range memory.Participants {
+		name := strings.TrimSpace(participant.DisplayName)
+		if name == "" {
+			name = strings.TrimSpace(participant.ID)
+		}
+		if participant.Role != "" {
+			name += "（" + participant.Role + "）"
+		}
+		if name != "" {
+			participantNames = append(participantNames, name)
+		}
+	}
+	participants := "無"
+	if len(participantNames) > 0 {
+		participants = strings.Join(participantNames, "、")
+	}
+
+	lines := []string{
+		"記憶詳細資訊",
+		fmt.Sprintf("ID：`%s`", memory.ID),
+		fmt.Sprintf("狀態：%s", status),
+		fmt.Sprintf("分類：%s（%s）", kuroMemoryCategoryLabel(memory.Category), memory.Category),
+		fmt.Sprintf("內容：%s", memory.Value),
+		fmt.Sprintf("鍵：`%s`", memory.Key),
+		fmt.Sprintf("重要性／信心：%.2f／%.2f", memory.Importance, memory.Confidence),
+		fmt.Sprintf("作用域：%s `%s`", scope, memory.ScopeID),
+		fmt.Sprintf("參與者：%s", participants),
+		fmt.Sprintf("建立／更新：%s／%s", formatKuroMemoryTime(memory.CreatedAt), formatKuroMemoryTime(memory.UpdatedAt)),
+		fmt.Sprintf("最後檢索：%s（%d 次）", formatKuroMemoryTime(memory.LastAccessedAt), memory.AccessCount),
+	}
+	if memory.SourceChannelID != "" || memory.SourceRequestID != "" {
+		lines = append(lines, fmt.Sprintf("來源：頻道 `%s`／請求 `%s`", memory.SourceChannelID, memory.SourceRequestID))
+	}
+	if memory.SupersedesID != "" {
+		lines = append(lines, fmt.Sprintf("取代舊記憶：`%s`", memory.SupersedesID))
+	}
+	if memory.PurgeAfter != "" {
+		lines = append(lines, fmt.Sprintf("預計永久清除：%s", formatKuroMemoryTime(memory.PurgeAfter)))
+	}
+	return truncateKuroText(strings.Join(lines, "\n"), 1900)
+}
+
+func formatKuroMemoryTime(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "尚未發生"
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return value
+	}
+	return parsed.Local().Format("2006-01-02 15:04:05")
 }
 
 func formatKuroMemories(result servicekuro.MemoryResponse, trash bool, page, pageSize int) string {

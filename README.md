@@ -42,7 +42,7 @@ Discord Bot 需要啟用 Message Content Intent，並擁有 View Channel、Read 
 - 每次觸發時才向 Discord 抓取最近訊息，不在背景監聽時寫入記憶。
 - Kuro 管理功能統一使用 `小黑 /英文指令` 文字格式；輸入 `小黑 /help` 可查看完整列表。
 - `小黑 /newchat` 會設定該頻道的新上下文邊界；舊訊息仍存在 Discord，但不再注入新 prompt。
-- `小黑 /status`、`小黑 /ai-stats [24h|7d|30d]`、記憶管理與備份復原指令都只允許 `KURO_COMMAND_USER_IDS` 中的使用者。`小黑 /memory-backups [頁碼]` 可列出整庫備份、`小黑 /memory-backup` 可立即備份，`小黑 /memory-rollback <備份ID> confirm` 可復原整個記憶庫；復原前會再自動建立安全備份。列表每頁顯示 5 條，省略頁碼時顯示第 1 頁。
+- `小黑 /status`、`小黑 /ai-stats [24h|7d|30d]`、記憶管理與備份復原指令都只允許 `KURO_COMMAND_USER_IDS` 中的使用者。`小黑 /memory-info <記憶ID>` 可查看單筆記憶的完整狀態，並透過記憶原有的 Discord 頻道與使用者訊息 ID 即時顯示來源訊息和跳轉連結；不保存原文，也不尋找 Kuro 回覆。`小黑 /memory-backups [頁碼]` 可列出整庫備份、`小黑 /memory-backup` 可立即備份，`小黑 /memory-rollback <備份ID> confirm` 可復原整個記憶庫；復原前會再自動建立安全備份。列表每頁顯示 5 條，省略頁碼時顯示第 1 頁。
 - Kuro 不再註冊 `/小黑` 或 `/newchat` Discord Slash Command；其他既有遊戲資訊 Slash Command 不受影響。
 
 新對話邊界保存在 PostgreSQL 的 `kuro_channel_states`；長期記憶管理則由 AI Runtime 的 memory-service 負責。
