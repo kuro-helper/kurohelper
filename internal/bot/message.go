@@ -16,7 +16,7 @@ import (
 )
 
 func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate) {
-	if event == nil || event.Author == nil || event.Author.Bot || event.Content == "" {
+	if event == nil || event.Author == nil || event.Author.Bot {
 		return
 	}
 	if !botkuro.ChannelAllowed(event.ChannelID) {
@@ -31,14 +31,25 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		}
 	}
 	settings := botkuro.GetSettings()
+	images := collectKuroImageAttachments(event.Message)
+	if len(event.Attachments) > 0 {
+		slog.Info("Kuro Discord attachments inspected",
+			"requestID", event.ID,
+			"attachmentCount", len(event.Attachments),
+			"visionImageCount", len(images),
+		)
+	}
 	content, accepted := servicekuro.PrepareTrigger(
 		event.Content,
 		settings.TriggerPrefix,
 		botID,
 		mentioned,
 	)
-	if !accepted || content == "" {
+	if !accepted || (content == "" && len(images) == 0) {
 		return
+	}
+	if content == "" || (len(images) > 0 && strings.TrimSpace(content) == strings.TrimSpace(settings.TriggerPrefix)) {
+		content = "請看看附加的圖片。"
 	}
 	if command, ok := servicekuro.ParseTextCommand(event.Content, settings.TriggerPrefix); ok {
 		handleKuroTextCommand(session, event, command)
@@ -100,6 +111,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		RetrievalText:       retrievalText,
 		MentionedUsers:      mentionedParticipants,
 		ContextParticipants: contextParticipants,
+		Images:              images,
 	})
 	runtimeRoundTripMs := elapsedMilliseconds(runtimeStartedAt)
 	if err != nil {
