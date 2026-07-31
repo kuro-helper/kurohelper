@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm"
@@ -53,7 +54,10 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線，請稍後再試。")
 		return
 	}
+	acceptedAt := time.Now()
+	queueStartedAt := time.Now()
 	botkuro.LockGeneration()
+	botQueueMs := elapsedMilliseconds(queueStartedAt)
 	defer botkuro.UnlockGeneration()
 	if !client.Connected() {
 		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 已中斷連線，請稍後再試。")
@@ -61,6 +65,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	}
 	_ = session.ChannelTyping(event.ChannelID)
 
+	historyStartedAt := time.Now()
 	boundaryID := ""
 	state, err := db.GetKuroChannelState(db.Dbs, event.ChannelID)
 	if err == nil {
@@ -82,7 +87,9 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		servicekuro.MentionedUser{ID: event.Author.ID, DisplayName: displayName},
 		mentionedParticipants,
 	)
+	discordHistoryMs := elapsedMilliseconds(historyStartedAt)
 
+	runtimeStartedAt := time.Now()
 	response, err := client.Generate(context.Background(), servicekuro.GenerateRequest{
 		RequestID:           event.ID,
 		ChannelID:           event.ChannelID,
@@ -94,13 +101,20 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		MentionedUsers:      mentionedParticipants,
 		ContextParticipants: contextParticipants,
 	})
+	runtimeRoundTripMs := elapsedMilliseconds(runtimeStartedAt)
 	if err != nil {
 		slog.Error("Kuro 生成失敗", "error", err, "requestID", event.ID)
-		sendKuroMessage(session, event.ChannelID, "Kuro 目前無法完成回覆，請稍後再試。")
+		sendStartedAt := time.Now()
+		_, sendErr := sendKuroMessage(session, event.ChannelID, "Kuro 目前無法完成回覆，請稍後再試。")
+		recordKuroGenerationMetric(event, acceptedAt, "error", nil, botQueueMs, discordHistoryMs, runtimeRoundTripMs, elapsedMilliseconds(sendStartedAt), sendErr)
 		return
 	}
 	if strings.TrimSpace(response.Text) != "" {
-		sendKuroMessage(session, event.ChannelID, response.Text)
+		sendStartedAt := time.Now()
+		_, sendErr := sendKuroMessage(session, event.ChannelID, response.Text)
+		recordKuroGenerationMetric(event, acceptedAt, "success", response.Metrics, botQueueMs, discordHistoryMs, runtimeRoundTripMs, elapsedMilliseconds(sendStartedAt), sendErr)
+	} else {
+		recordKuroGenerationMetric(event, acceptedAt, "error", response.Metrics, botQueueMs, discordHistoryMs, runtimeRoundTripMs, 0, errors.New("empty AI response"))
 	}
 }
 
@@ -175,8 +189,8 @@ func mentionedUsers(message *discordgo.Message, botID string) []servicekuro.Ment
 	return result
 }
 
-func sendKuroMessage(session *discordgo.Session, channelID, content string) {
-	_, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+func sendKuroMessage(session *discordgo.Session, channelID, content string) (*discordgo.Message, error) {
+	message, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content: content,
 		AllowedMentions: &discordgo.MessageAllowedMentions{
 			Parse: []discordgo.AllowedMentionType{},
@@ -185,4 +199,5 @@ func sendKuroMessage(session *discordgo.Session, channelID, content string) {
 	if err != nil {
 		slog.Error("發送 Kuro Discord 訊息失敗", "error", err, "channelID", channelID)
 	}
+	return message, err
 }

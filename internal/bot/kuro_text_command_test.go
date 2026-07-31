@@ -17,6 +17,9 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		"/forget",
 		"/restore",
 		"/memory-clear confirm",
+		"/memory-backups",
+		"/memory-backup",
+		"/memory-rollback",
 	} {
 		if !strings.Contains(kuroTextCommandHelp, command) {
 			t.Fatalf("help is missing %q", command)
@@ -92,6 +95,40 @@ func TestTextCommandConfirmed(t *testing.T) {
 	for _, value := range []string{"確認", "确认", "true", "yes"} {
 		if textCommandConfirmed(value) {
 			t.Fatalf("unexpected confirmation from %q", value)
+		}
+	}
+}
+
+func TestFormatKuroMemoryBackups(t *testing.T) {
+	result := servicekuro.MemoryResponse{
+		Count:                6,
+		BackupRetentionCount: 30,
+		Backups: []servicekuro.MemoryBackup{{
+			ID:          "20260730T120000Z-auto-abcdef12",
+			CreatedAt:   "2026-07-30T12:00:00+00:00",
+			Reason:      "auto",
+			SizeBytes:   4096,
+			MemoryCount: 3,
+		}},
+	}
+	formatted := formatKuroMemoryBackups(result, 1, 5)
+	for _, expected := range []string{"第 1/2 頁", "最多保留 30 份", "定時", "3 條", "20260730T120000Z-auto-abcdef12"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatted backup list is missing %q: %s", expected, formatted)
+		}
+	}
+}
+
+func TestFormatKuroBackupRestoreIncludesSafetyBackup(t *testing.T) {
+	formatted := formatKuroBackupRestore(servicekuro.MemoryResponse{
+		Status:              "restored_backup",
+		RestoredActiveCount: 4,
+		Backup:              &servicekuro.MemoryBackup{ID: "selected-backup"},
+		SafetyBackup:        &servicekuro.MemoryBackup{ID: "safety-backup"},
+	})
+	for _, expected := range []string{"selected-backup", "4 條", "safety-backup"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatted restore result is missing %q: %s", expected, formatted)
 		}
 	}
 }

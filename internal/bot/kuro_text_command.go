@@ -20,11 +20,15 @@ const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /help — 列出這份指令說明
 小黑 /newchat — 開始新的短期對話
 小黑 /status — 查看 AI Runtime 狀態
+小黑 /ai-stats [24h|7d|30d] — 查看 AI 延遲、Token 與費用統計
 小黑 /memory-list [頁碼] — 分頁列出有效記憶
 小黑 /memory-trash [頁碼] — 分頁列出記憶垃圾桶
 小黑 /forget <記憶ID> — 將記憶移入垃圾桶
 小黑 /restore <記憶ID> — 復原記憶
-小黑 /memory-clear confirm — 將所有有效記憶移入垃圾桶`
+小黑 /memory-clear confirm — 將所有有效記憶移入垃圾桶
+小黑 /memory-backups [頁碼] — 分頁列出整庫備份
+小黑 /memory-backup — 立即建立整庫備份
+小黑 /memory-rollback <備份ID> confirm — 將整個記憶庫復原到指定備份`
 
 func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageCreate, command servicekuro.TextCommand) {
 	if !botkuro.CommandAllowed(event.Author.ID) {
@@ -52,17 +56,42 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		return
 	}
 
+	if command.Name == "ai-stats" {
+		period, label, valid := kuroAIStatsPeriod(command.Args)
+		if !valid {
+			sendKuroMessage(session, event.ChannelID, "用法：小黑 /ai-stats [24h|7d|30d]")
+			return
+		}
+		since := time.Now().Add(-period)
+		stats, err := db.GetKuroAIStats(db.Dbs, since)
+		if err != nil {
+			sendKuroMessage(session, event.ChannelID, "讀取 AI 統計失敗，請稍後再試。")
+			return
+		}
+		providers, err := db.GetKuroAIProviderStats(db.Dbs, since)
+		if err != nil {
+			sendKuroMessage(session, event.ChannelID, "讀取 AI 供應商統計失敗，請稍後再試。")
+			return
+		}
+		sendKuroMessage(session, event.ChannelID, formatKuroAIStats(stats, providers, label))
+		return
+	}
+
 	client := botkuro.Client()
 	if client == nil || !client.Connected() {
 		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線。")
 		return
 	}
-	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-clear" {
+	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-clear" || command.Name == "memory-backup" || command.Name == "memory-rollback" {
 		botkuro.LockGeneration()
 		defer botkuro.UnlockGeneration()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	timeout := 15 * time.Second
+	if command.Name == "memory-rollback" {
+		timeout = 2 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	var content string
@@ -120,6 +149,45 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		if err == nil {
 			content = fmt.Sprintf("已將 %d 條記憶移入垃圾桶，%d 天內可以復原。", result.Count, result.TrashRetentionDays)
 		}
+	case "memory-backups":
+		page, valid := textCommandPage(command.Args)
+		if !valid {
+			content = "用法：小黑 /memory-backups [頁碼]"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.ListMemoryBackups(ctx, kuroMemoryPageSize, (page-1)*kuroMemoryPageSize)
+		if err == nil {
+			if result.Status == "unavailable" || result.Status == "disabled" {
+				content = "記憶備份服務目前不可用。"
+			} else {
+				content = formatKuroMemoryBackups(result, page, kuroMemoryPageSize)
+			}
+		}
+	case "memory-backup":
+		if len(command.Args) != 0 {
+			content = "用法：小黑 /memory-backup"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.CreateMemoryBackup(ctx)
+		if err == nil {
+			if result.Backup != nil {
+				content = fmt.Sprintf("已建立記憶備份 `%s`（%d 條記憶）。", result.Backup.ID, result.Backup.MemoryCount)
+			} else {
+				content = "記憶備份服務目前不可用。"
+			}
+		}
+	case "memory-rollback":
+		if len(command.Args) != 2 || len(command.Args[0]) < 8 || !textCommandConfirmed(command.Args[1]) {
+			content = "這會以備份取代整個記憶庫。若要執行，請輸入：小黑 /memory-rollback <備份ID> confirm"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.RestoreMemoryBackup(ctx, command.Args[0])
+		if err == nil {
+			content = formatKuroBackupRestore(result)
+		}
 	default:
 		content = "未知的 Kuro 指令。\n\n" + kuroTextCommandHelp
 	}
@@ -128,6 +196,62 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		content = "操作失敗：" + err.Error()
 	}
 	sendKuroMessage(session, event.ChannelID, content)
+}
+
+func formatKuroMemoryBackups(result servicekuro.MemoryResponse, page, pageSize int) string {
+	total := result.Count
+	minimumTotal := (page-1)*pageSize + len(result.Backups)
+	if total < minimumTotal {
+		total = minimumTotal
+	}
+	if len(result.Backups) == 0 {
+		if total > 0 {
+			totalPages := (total + pageSize - 1) / pageSize
+			return fmt.Sprintf("頁碼超出範圍；目前共有 %d 份備份、%d 頁。", total, totalPages)
+		}
+		return "目前沒有記憶備份。"
+	}
+	totalPages := (total + pageSize - 1) / pageSize
+	lines := []string{fmt.Sprintf("記憶備份（第 %d/%d 頁，共 %d 份；最多保留 %d 份）：", page, totalPages, total, result.BackupRetentionCount)}
+	for _, backup := range result.Backups {
+		createdAt := backup.CreatedAt
+		if parsed, parseErr := time.Parse(time.RFC3339, backup.CreatedAt); parseErr == nil {
+			createdAt = parsed.Local().Format("2006-01-02 15:04")
+		}
+		lines = append(lines, fmt.Sprintf("`%s` [%s｜%s] %d 條、%.1f KiB", backup.ID, createdAt, kuroBackupReasonLabel(backup.Reason), backup.MemoryCount, float64(backup.SizeBytes)/1024))
+	}
+	lines = append(lines, "使用 `小黑 /memory-backups <頁碼>` 切換頁面。")
+	return truncateKuroText(strings.Join(lines, "\n"), 1900)
+}
+
+func kuroBackupReasonLabel(reason string) string {
+	labels := map[string]string{
+		"auto":        "定時",
+		"startup":     "啟動",
+		"manual":      "手動",
+		"pre-restore": "復原前安全備份",
+	}
+	if label := labels[reason]; label != "" {
+		return label
+	}
+	return reason
+}
+
+func formatKuroBackupRestore(result servicekuro.MemoryResponse) string {
+	if result.Status == "restored_backup" && result.Backup != nil {
+		safetyID := ""
+		if result.SafetyBackup != nil {
+			safetyID = fmt.Sprintf("；操作前狀態另存為 `%s`", result.SafetyBackup.ID)
+		}
+		return fmt.Sprintf("已從備份 `%s` 復原，共重建 %d 條有效記憶%s。", result.Backup.ID, result.RestoredActiveCount, safetyID)
+	}
+	if result.Status == "ambiguous" {
+		return "備份 ID 前綴符合多份備份，請輸入更多字元。"
+	}
+	if result.Status == "unavailable" || result.Status == "disabled" {
+		return "記憶備份服務目前不可用。"
+	}
+	return "找不到相符的記憶備份。"
 }
 
 func textCommandPage(args []string) (int, bool) {
@@ -146,6 +270,62 @@ func textCommandPage(args []string) (int, bool) {
 
 func textCommandConfirmed(value string) bool {
 	return strings.EqualFold(value, "confirm")
+}
+
+func kuroAIStatsPeriod(args []string) (time.Duration, string, bool) {
+	if len(args) == 0 {
+		return 24 * time.Hour, "最近 24 小時", true
+	}
+	if len(args) != 1 {
+		return 0, "", false
+	}
+	switch strings.ToLower(args[0]) {
+	case "24h":
+		return 24 * time.Hour, "最近 24 小時", true
+	case "7d":
+		return 7 * 24 * time.Hour, "最近 7 天", true
+	case "30d":
+		return 30 * 24 * time.Hour, "最近 30 天", true
+	default:
+		return 0, "", false
+	}
+}
+
+func formatKuroAIStats(stats db.KuroAIStats, providers []db.KuroAIProviderStats, label string) string {
+	if stats.RequestCount == 0 {
+		return fmt.Sprintf("AI 統計（%s）\n目前還沒有生成紀錄。", label)
+	}
+	usage := fmt.Sprintf("Token：尚未取得供應商用量（0/%d 筆）", stats.RequestCount)
+	if stats.UsageCount > 0 {
+		usage = fmt.Sprintf(
+			"Token：輸入 %d／輸出 %d／合計 %d（推理 %d、快取 %d）\n費用：US$ %.6f（有精確用量 %d/%d 筆）",
+			stats.PromptTokens, stats.CompletionTokens, stats.TotalTokens,
+			stats.ReasoningTokens, stats.CachedTokens, stats.CostUSD,
+			stats.UsageCount, stats.RequestCount,
+		)
+	}
+	result := fmt.Sprintf(
+		"AI 統計（%s）\n請求：%d（成功 %d、失敗 %d、重試 %d）\n成功回覆端到端：平均 %.2fs／P50 %.2fs／P95 %.2fs\n成功回覆 AI Runtime：平均 %.2fs；供應商：平均 %.2fs\n%s",
+		label, stats.RequestCount, stats.SuccessCount, stats.FailureCount, stats.RetryCount,
+		stats.AverageEndToEndMs/1000, stats.P50EndToEndMs/1000, stats.P95EndToEndMs/1000,
+		stats.AverageRuntimeMs/1000, stats.AverageProviderMs/1000, usage,
+	)
+	if len(providers) == 0 {
+		return result
+	}
+	lines := []string{"實際供應商："}
+	for index, provider := range providers {
+		if index >= 5 {
+			lines = append(lines, fmt.Sprintf("另有 %d 家供應商。", len(providers)-index))
+			break
+		}
+		lines = append(lines, fmt.Sprintf(
+			"• %s：%d 次（成功 %d、失敗 %d），首 Token 平均 %.2fs，總耗時平均 %.2fs／P95 %.2fs",
+			provider.Provider, provider.RequestCount, provider.SuccessCount, provider.FailureCount,
+			provider.AverageFirstTokenMs/1000, provider.AverageDurationMs/1000, provider.P95DurationMs/1000,
+		))
+	}
+	return truncateKuroText(result+"\n"+strings.Join(lines, "\n"), 1900)
 }
 
 func formatKuroMemories(result servicekuro.MemoryResponse, trash bool, page, pageSize int) string {
