@@ -90,10 +90,14 @@ func main() {
 	cache.InitCacheLostTime(utils.GetEnvInt("COMMAND_CACHE_LOST_HOURS", 4))
 	// Seiya初始化
 	seiya.InitSeiyaCorrespond()
-	err := seiya.Init()
-	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+	var err error
+	if !strings.EqualFold(os.Getenv("INIT_SEIYA"), "false") {
+		err = seiya.Init()
+		if err != nil {
+			slog.Warn("Seiya 資料初始化失敗，相關查詢功能暫時不可用", "error", err)
+		}
+	} else {
+		slog.Warn("Seiya 資料初始化已停用")
 	}
 	// erogs init
 	erogs.InitRateLimit(time.Duration(utils.GetEnvInt("EROGS_RATE_LIMIT_RESET_TIME", 10)))
