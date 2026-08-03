@@ -142,8 +142,8 @@ func (a *AddHasPlayed) HandleComponent(s *discordgo.Session, i *discordgo.Intera
 			}
 
 			// 確保新建立的使用者有加入快取
-			if _, ok := store.UserStore[userID]; !ok {
-				store.UserStore[userID] = struct{}{}
+			if !store.HasUser(userID) {
+				store.AddUser(userID)
 			}
 
 			embed := &discordgo.MessageEmbed{

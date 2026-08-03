@@ -18,7 +18,7 @@ func LoadGameStateMaps(discordID string) (statusMap map[int]kurohelperdb.UserGam
 	if strings.TrimSpace(discordID) == "" {
 		return statusMap, inWishMap, nil
 	}
-	if _, ok := store.UserStore[discordID]; !ok {
+	if !store.HasUser(discordID) {
 		return statusMap, inWishMap, nil
 	}
 

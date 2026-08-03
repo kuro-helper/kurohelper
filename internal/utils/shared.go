@@ -72,7 +72,7 @@ func GenerateImage(i *discordgo.InteractionCreate, url string) *discordgo.Messag
 	var image *discordgo.MessageEmbedImage
 	if i.GuildID != "" {
 		// guild
-		if _, ok := store.GuildDiscordAllowList[i.GuildID]; ok {
+		if store.GuildAllowed(i.GuildID) {
 			image = &discordgo.MessageEmbedImage{
 				URL: url,
 			}
@@ -80,7 +80,7 @@ func GenerateImage(i *discordgo.InteractionCreate, url string) *discordgo.Messag
 	} else {
 		// DM
 		userID := GetUserID(i)
-		if _, ok := store.GuildDiscordAllowList[userID]; ok {
+		if store.DMAllowed(userID) {
 			image = &discordgo.MessageEmbedImage{
 				URL: url,
 			}

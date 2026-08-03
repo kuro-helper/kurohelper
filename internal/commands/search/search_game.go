@@ -368,12 +368,12 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		// 檢查是否允許顯示圖片
 		if i.GuildID != "" {
 			// guild
-			if _, ok := store.GuildDiscordAllowList[i.GuildID]; !ok {
+			if !store.GuildAllowed(i.GuildID) {
 				imageURL = ""
 			}
 		} else {
 			// DM
-			if _, ok := store.GuildDiscordAllowList[discordID]; !ok {
+			if !store.DMAllowed(discordID) {
 				imageURL = ""
 			}
 		}
@@ -829,12 +829,12 @@ func vndbSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Intera
 	if strings.TrimSpace(thumbnailURL) != "" {
 		if i.GuildID != "" {
 			// guild
-			if _, ok := store.GuildDiscordAllowList[i.GuildID]; !ok {
+			if !store.GuildAllowed(i.GuildID) {
 				thumbnailURL = ""
 			}
 		} else {
 			// DM
-			if _, ok := store.GuildDiscordAllowList[userID]; !ok {
+			if !store.DMAllowed(userID) {
 				thumbnailURL = ""
 			}
 		}

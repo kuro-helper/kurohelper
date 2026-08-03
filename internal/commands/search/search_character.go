@@ -362,11 +362,11 @@ func vndbSearchCharacterWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.I
 	userID := utils.GetUserID(i)
 	if thumbnailURL != "" {
 		if i.GuildID != "" {
-			if _, ok := store.GuildDiscordAllowList[i.GuildID]; !ok {
+			if !store.GuildAllowed(i.GuildID) {
 				thumbnailURL = ""
 			}
 		} else {
-			if _, ok := store.GuildDiscordAllowList[userID]; !ok {
+			if !store.DMAllowed(userID) {
 				thumbnailURL = ""
 			}
 		}
@@ -499,11 +499,11 @@ func bangumiSearchCharacter(s *discordgo.Session, i *discordgo.InteractionCreate
 	userID := utils.GetUserID(i)
 	if thumbnailURL != "" {
 		if i.GuildID != "" {
-			if _, ok := store.GuildDiscordAllowList[i.GuildID]; !ok {
+			if !store.GuildAllowed(i.GuildID) {
 				thumbnailURL = ""
 			}
 		} else {
-			if _, ok := store.GuildDiscordAllowList[userID]; !ok {
+			if !store.DMAllowed(userID) {
 				thumbnailURL = ""
 			}
 		}

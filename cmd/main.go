@@ -81,15 +81,27 @@ func main() {
 	// 資料庫初始化
 	dbInit()
 	// 初始化白名單存成快取
-	store.InitAllowList()
+	if err := store.InitAllowList(); err != nil {
+		slog.Error("初始化 Discord 白名單失敗", "error", err)
+		os.Exit(1)
+	}
 	// init ZhtwToJp var
-	service.InitZhtwToJp()
+	if err := service.InitZhtwToJp(); err != nil {
+		slog.Error("初始化繁日漢字轉換表失敗", "error", err)
+		os.Exit(1)
+	}
 	// 使用者快取初始化
-	store.InitUser()
+	if err := store.InitUser(); err != nil {
+		slog.Error("初始化使用者快取失敗", "error", err)
+		os.Exit(1)
+	}
 	// 初始化快取時間
 	cache.InitCacheLostTime(utils.GetEnvInt("COMMAND_CACHE_LOST_HOURS", 4))
 	// Seiya初始化
-	seiya.InitSeiyaCorrespond()
+	if err := seiya.InitSeiyaCorrespond(); err != nil {
+		slog.Error("初始化 Seiya 對應表失敗", "error", err)
+		os.Exit(1)
+	}
 	var err error
 	if !strings.EqualFold(os.Getenv("INIT_SEIYA"), "false") {
 		err = seiya.Init()
@@ -187,10 +199,12 @@ func envOrDefault(key, fallback string) string {
 // db init
 func dbInit() {
 	config := db.Config{
+		DBHost:     os.Getenv("DB_HOST"),
 		DBOwner:    os.Getenv("DB_OWNER"),
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 		DBPort:     os.Getenv("DB_PORT"),
+		SSLMode:    os.Getenv("DB_SSLMODE"),
 	}
 
 	err := db.InitDsn(config)

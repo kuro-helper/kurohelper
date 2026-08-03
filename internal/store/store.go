@@ -1,56 +1,93 @@
 package store
 
 import (
-	"log/slog"
-	"os"
+	"sync"
 
 	"kurohelperservice/db"
 )
 
 var (
-	GuildDiscordAllowList = make(map[string]struct{})
-	DmDiscordAllowList    = make(map[string]struct{})
-
-	UserStore = make(map[string]struct{})
+	allowListMu           sync.RWMutex
+	guildDiscordAllowList = make(map[string]struct{})
+	dmDiscordAllowList    = make(map[string]struct{})
+	userStoreMu           sync.RWMutex
+	userStore             = make(map[string]struct{})
 )
 
-func InitAllowList() {
-	guildDiscordAllowList, err := db.GetDiscordAllowListByKind(db.Dbs, "guild")
+func InitAllowList() error {
+	guildEntries, err := db.GetDiscordAllowListByKind(db.Dbs, "guild")
 	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+		return err
 	}
 
-	dmDiscordAllowList, err := db.GetDiscordAllowListByKind(db.Dbs, "dm")
+	dmEntries, err := db.GetDiscordAllowListByKind(db.Dbs, "dm")
 	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+		return err
 	}
 
-	// 存進快取
-	for _, g := range guildDiscordAllowList {
-		GuildDiscordAllowList[g.ID] = struct{}{}
+	guilds := make(map[string]struct{}, len(guildEntries))
+	for _, g := range guildEntries {
+		guilds[g.ID] = struct{}{}
 	}
-	for _, d := range dmDiscordAllowList {
-		GuildDiscordAllowList[d.ID] = struct{}{}
+	dms := make(map[string]struct{}, len(dmEntries))
+	for _, d := range dmEntries {
+		dms[d.ID] = struct{}{}
 	}
+	allowListMu.Lock()
+	guildDiscordAllowList = guilds
+	dmDiscordAllowList = dms
+	allowListMu.Unlock()
+	return nil
+}
+
+func GuildAllowed(id string) bool {
+	allowListMu.RLock()
+	defer allowListMu.RUnlock()
+	_, ok := guildDiscordAllowList[id]
+	return ok
+}
+
+func DMAllowed(id string) bool {
+	allowListMu.RLock()
+	defer allowListMu.RUnlock()
+	_, ok := dmDiscordAllowList[id]
+	return ok
 }
 
 // 把有存在的User從資料庫載入快取
 //
 // 目的是檢查使用者的時候不用先檢查他是否在資料庫，可以直接決定要產生User紀錄還是直接抓出資料
-func InitUser() {
-	user, err := db.GetAllUsers(db.Dbs)
+func InitUser() error {
+	users, err := db.GetAllUsers(db.Dbs)
 	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+		return err
 	}
 
-	// 存進快取
-	for _, e := range user {
+	loaded := make(map[string]struct{}, len(users))
+	for _, e := range users {
 		if e.DiscordID == nil || *e.DiscordID == "" {
 			continue
 		}
-		UserStore[*e.DiscordID] = struct{}{}
+		loaded[*e.DiscordID] = struct{}{}
 	}
+	userStoreMu.Lock()
+	userStore = loaded
+	userStoreMu.Unlock()
+	return nil
+}
+
+func HasUser(discordID string) bool {
+	userStoreMu.RLock()
+	defer userStoreMu.RUnlock()
+	_, ok := userStore[discordID]
+	return ok
+}
+
+func AddUser(discordID string) {
+	if discordID == "" {
+		return
+	}
+	userStoreMu.Lock()
+	userStore[discordID] = struct{}{}
+	userStoreMu.Unlock()
 }

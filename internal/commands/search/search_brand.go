@@ -393,13 +393,13 @@ func vndbSearchBrandWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 		// 檢查是否允許顯示圖片
 		if i.GuildID != "" {
 			// guild
-			if _, ok := store.GuildDiscordAllowList[i.GuildID]; !ok {
+			if !store.GuildAllowed(i.GuildID) {
 				imageURL = ""
 			}
 		} else {
 			// DM
 			userID := utils.GetUserID(i)
-			if _, ok := store.GuildDiscordAllowList[userID]; !ok {
+			if !store.DMAllowed(userID) {
 				imageURL = ""
 			}
 		}
