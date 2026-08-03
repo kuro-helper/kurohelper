@@ -4,17 +4,17 @@ import "testing"
 
 func TestCommandAllowedFailsClosedWithoutConfiguredUsers(t *testing.T) {
 	Init(nil, Settings{})
-	if CommandAllowed("594197917477109773") {
+	if CommandAllowed("test-admin-a") {
 		t.Fatal("CommandAllowed() must reject users when no command allowlist is configured")
 	}
 }
 
 func TestCommandAllowedUsesConfiguredUserIDs(t *testing.T) {
 	Init(nil, Settings{CommandUserIDs: map[string]struct{}{
-		"594197917477109773": {},
-		"566279354343096323": {},
+		"test-admin-a": {},
+		"test-admin-b": {},
 	}})
-	if !CommandAllowed("594197917477109773") {
+	if !CommandAllowed("test-admin-a") {
 		t.Fatal("configured user was rejected")
 	}
 	if CommandAllowed("123") {

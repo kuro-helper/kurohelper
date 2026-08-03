@@ -15,13 +15,13 @@ import (
 	slogmulti "github.com/samber/slog-multi"
 
 	"kurohelper/internal/bot"
+	botkuro "kurohelper/internal/bot/kuro"
 	"kurohelper/internal/cache"
-	botkuro "kurohelper/internal/kuro"
 	"kurohelper/internal/store"
 	"kurohelper/internal/utils"
 	service "kurohelperservice"
+	servicekuro "kurohelperservice/airuntime"
 	"kurohelperservice/db"
-	servicekuro "kurohelperservice/kuro"
 	"kurohelperservice/provider/erogs"
 	"kurohelperservice/provider/seiya"
 	"kurohelperservice/provider/ymgal"
@@ -130,6 +130,7 @@ func main() {
 	// 掛載自動清除快取job
 	stopChan := make(chan struct{})
 	go cache.CleanCacheJob(time.Duration(utils.GetEnvInt("COMMAND_CLEAN_CACHE_JOB_HOURS", 12)), stopChan)
+	go botkuro.CleanKuroContextMessagesJob(stopChan)
 
 	runtimeContext, stopRuntime := context.WithCancel(context.Background())
 	defer stopRuntime()
@@ -144,10 +145,11 @@ func main() {
 			slog.Error("Kuro AI Runtime 設定錯誤", "error", runtimeErr)
 			os.Exit(1)
 		}
+		runtimeClient.SetMetricHandler(botkuro.RecordKuroRuntimeMetric)
 		botkuro.Init(runtimeClient, botkuro.Settings{
 			TriggerPrefix:      envOrDefault("KURO_TRIGGER_PREFIX", "小黑"),
-			ChannelIDs:         servicekuro.ParseIDSet(os.Getenv("KURO_CHANNEL_IDS")),
-			CommandUserIDs:     servicekuro.ParseIDSet(os.Getenv("KURO_COMMAND_USER_IDS")),
+			ChannelIDs:         botkuro.ParseIDSet(os.Getenv("KURO_CHANNEL_IDS")),
+			CommandUserIDs:     botkuro.ParseIDSet(os.Getenv("KURO_COMMAND_USER_IDS")),
 			RecentMessageLimit: utils.GetEnvInt("KURO_RECENT_MESSAGE_LIMIT", 15),
 			RecentContextChars: utils.GetEnvInt("KURO_RECENT_CONTEXT_CHARS", 6000),
 		})
@@ -170,7 +172,7 @@ func main() {
 
 	kuroHelper.AddHandler(bot.Ready)
 	kuroHelper.AddHandler(bot.OnInteraction)
-	kuroHelper.AddHandler(bot.OnMessageCreate)
+	kuroHelper.AddHandler(botkuro.OnMessageCreate)
 
 	err = kuroHelper.Open() // websocket connect
 	if err != nil {

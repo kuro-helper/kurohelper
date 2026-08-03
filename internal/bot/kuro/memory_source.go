@@ -1,4 +1,4 @@
-package bot
+package kuro
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
 )
 
 func loadKuroMemorySource(session *discordgo.Session, memory *servicekuro.Memory) string {

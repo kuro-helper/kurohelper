@@ -1,26 +1,29 @@
-package bot
+package kuro
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
-	botkuro "kurohelper/internal/kuro"
-	"kurohelperservice/db"
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
+	kurosvc "kurohelperservice/kuro"
 )
 
 const kuroMemoryPageSize = 5
+
+const kuroNewChatConfirmation = "已開始新的短期對話；長期記憶不會被刪除。"
 
 const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /help — 列出這份指令說明
 小黑 /newchat — 開始新的短期對話
 小黑 /status — 查看 AI Runtime 狀態
 小黑 /ai-stats [24h|7d|30d] — 查看 AI 延遲、Token 與費用統計
+小黑 /raw-responses — 查看最近五則模型原始回覆
 小黑 /memory-list [頁碼] — 分頁列出有效記憶
 小黑 /memory-info <記憶ID> — 查看單筆記憶的詳細資訊
 小黑 /memory-trash [頁碼] — 分頁列出記憶垃圾桶
@@ -31,61 +34,61 @@ const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /memory-backup — 立即建立整庫備份
 小黑 /memory-rollback <備份ID> confirm — 將整個記憶庫復原到指定備份`
 
-func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageCreate, command servicekuro.TextCommand) {
-	if !botkuro.CommandAllowed(event.Author.ID) {
-		sendKuroMessage(session, event.ChannelID, "你沒有使用 Kuro 管理指令的權限。")
+func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageCreate, command kuroTextCommand) {
+	if !CommandAllowed(event.Author.ID) {
+		sendKuroCommandMessage(session, event.ChannelID, "你沒有使用 Kuro 管理指令的權限。")
 		return
 	}
 
 	if command.Name == "help" {
-		sendKuroMessage(session, event.ChannelID, kuroTextCommandHelp)
+		sendKuroCommandMessage(session, event.ChannelID, kuroTextCommandHelp)
 		return
 	}
 
 	if command.Name == "newchat" {
 		if len(command.Args) != 0 {
-			sendKuroMessage(session, event.ChannelID, "用法：小黑 /newchat")
+			sendKuroCommandMessage(session, event.ChannelID, "用法：小黑 /newchat")
 			return
 		}
-		botkuro.LockGeneration()
-		defer botkuro.UnlockGeneration()
-		if err := db.SetKuroContextBoundary(db.Dbs, event.ChannelID, event.ID); err != nil {
-			sendKuroMessage(session, event.ChannelID, "建立新對話失敗，請稍後再試。")
+		LockGeneration()
+		defer UnlockGeneration()
+		if err := kurosvc.SetContextBoundary(event.ChannelID, event.ID); err != nil {
+			sendKuroCommandMessage(session, event.ChannelID, "建立新對話失敗，請稍後再試。")
 			return
 		}
-		sendKuroMessage(session, event.ChannelID, "已開始新的短期對話；長期記憶不會被刪除。")
+		confirmation, sendErr := sendKuroCommandMessage(session, event.ChannelID, kuroNewChatConfirmation)
+		if sendErr == nil && confirmation != nil {
+			if err := kurosvc.SetContextBoundary(event.ChannelID, confirmation.ID); err != nil {
+				slog.Warn("更新 Kuro 新對話確認訊息邊界失敗", "error", err, "channelID", event.ChannelID)
+			}
+		}
 		return
 	}
 
 	if command.Name == "ai-stats" {
 		period, label, valid := kuroAIStatsPeriod(command.Args)
 		if !valid {
-			sendKuroMessage(session, event.ChannelID, "用法：小黑 /ai-stats [24h|7d|30d]")
+			sendKuroCommandMessage(session, event.ChannelID, "用法：小黑 /ai-stats [24h|7d|30d]")
 			return
 		}
 		since := time.Now().Add(-period)
-		stats, err := db.GetKuroAIStats(db.Dbs, since)
+		stats, providers, err := kurosvc.GetAIStats(since)
 		if err != nil {
-			sendKuroMessage(session, event.ChannelID, "讀取 AI 統計失敗，請稍後再試。")
+			sendKuroCommandMessage(session, event.ChannelID, "讀取 AI 統計失敗，請稍後再試。")
 			return
 		}
-		providers, err := db.GetKuroAIProviderStats(db.Dbs, since)
-		if err != nil {
-			sendKuroMessage(session, event.ChannelID, "讀取 AI 供應商統計失敗，請稍後再試。")
-			return
-		}
-		sendKuroMessage(session, event.ChannelID, formatKuroAIStats(stats, providers, label))
+		sendKuroCommandMessage(session, event.ChannelID, formatKuroAIStats(stats, providers, label))
 		return
 	}
 
-	client := botkuro.Client()
+	client := Client()
 	if client == nil || !client.Connected() {
-		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線。")
+		sendKuroCommandMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線。")
 		return
 	}
 	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-clear" || command.Name == "memory-backup" || command.Name == "memory-rollback" {
-		botkuro.LockGeneration()
-		defer botkuro.UnlockGeneration()
+		LockGeneration()
+		defer UnlockGeneration()
 	}
 
 	timeout := 15 * time.Second
@@ -107,6 +110,19 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		health, err = client.Health(ctx)
 		if err == nil {
 			content = fmt.Sprintf("Runtime：%s\nSillyTavern：%t\n長期記憶：%t", health.Status, health.SillyTavernReady, health.MemoryEnabled)
+		}
+	case "raw-responses":
+		if len(command.Args) != 0 {
+			content = "用法：小黑 /raw-responses"
+			break
+		}
+		var result servicekuro.RawRepliesResponse
+		result, err = client.ListRawReplies(ctx)
+		if err == nil {
+			for _, message := range formatKuroRawReplies(result) {
+				sendKuroCommandMessage(session, event.ChannelID, message)
+			}
+			return
 		}
 	case "memory-list", "memory-trash":
 		page, valid := textCommandPage(command.Args)
@@ -209,7 +225,59 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 	if err != nil {
 		content = "操作失敗：" + err.Error()
 	}
-	sendKuroMessage(session, event.ChannelID, content)
+	sendKuroCommandMessage(session, event.ChannelID, content)
+}
+
+func sendKuroCommandMessage(session *discordgo.Session, channelID, content string) (*discordgo.Message, error) {
+	message, err := sendKuroMessage(session, channelID, content)
+	if err != nil || message == nil {
+		return message, err
+	}
+	if recordErr := kurosvc.RecordCommandResponse(channelID, message.ID); recordErr != nil {
+		slog.Warn(
+			"記錄 Kuro 指令回覆的上下文分類失敗",
+			"error", recordErr,
+			"channelID", channelID,
+			"messageID", message.ID,
+		)
+	}
+	return message, nil
+}
+
+func formatKuroRawReplies(result servicekuro.RawRepliesResponse) []string {
+	if len(result.Entries) == 0 {
+		return []string{"目前沒有快取的模型原始回覆。"}
+	}
+	entries := result.Entries
+	if len(entries) > 5 {
+		entries = entries[len(entries)-5:]
+	}
+	blocks := make([]string, 0, len(entries)+1)
+	blocks = append(blocks, fmt.Sprintf("最近 %d 則模型原始回覆（最新在前）：", len(entries)))
+	for index := len(entries) - 1; index >= 0; index-- {
+		entry := entries[index]
+		number := len(entries) - index
+		cachedAt := formatKuroMemoryTime(entry.CachedAt)
+		blocks = append(blocks, fmt.Sprintf("#%d｜%s\n%s", number, cachedAt, entry.RawText))
+	}
+	return splitKuroText(strings.Join(blocks, "\n\n──────────\n\n"), 1900)
+}
+
+func splitKuroText(value string, max int) []string {
+	if max < 1 {
+		return nil
+	}
+	runes := []rune(value)
+	chunks := make([]string, 0, (len(runes)+max-1)/max)
+	for len(runes) > 0 {
+		length := max
+		if len(runes) < length {
+			length = len(runes)
+		}
+		chunks = append(chunks, string(runes[:length]))
+		runes = runes[length:]
+	}
+	return chunks
 }
 
 func formatKuroMemoryBackups(result servicekuro.MemoryResponse, page, pageSize int) string {
@@ -305,7 +373,7 @@ func kuroAIStatsPeriod(args []string) (time.Duration, string, bool) {
 	}
 }
 
-func formatKuroAIStats(stats db.KuroAIStats, providers []db.KuroAIProviderStats, label string) string {
+func formatKuroAIStats(stats kurosvc.AIStats, providers []kurosvc.AIProviderStats, label string) string {
 	if stats.RequestCount == 0 {
 		return fmt.Sprintf("AI 統計（%s）\n目前還沒有生成紀錄。", label)
 	}
@@ -318,11 +386,19 @@ func formatKuroAIStats(stats db.KuroAIStats, providers []db.KuroAIProviderStats,
 			stats.UsageCount, stats.RequestCount,
 		)
 	}
+	memoryUsage := fmt.Sprintf(
+		"記憶擷取：%d 次，輸入 %d／輸出 %d／合計 %d Token，US$ %.6f",
+		stats.MemoryExtractionCount,
+		stats.MemoryExtractionPromptTokens,
+		stats.MemoryExtractionCompletionTokens,
+		stats.MemoryExtractionTotalTokens,
+		stats.MemoryExtractionCostUSD,
+	)
 	result := fmt.Sprintf(
-		"AI 統計（%s）\n請求：%d（成功 %d、失敗 %d、重試 %d）\n成功回覆端到端：平均 %.2fs／P50 %.2fs／P95 %.2fs\n成功回覆 AI Runtime：平均 %.2fs；供應商：平均 %.2fs\n%s",
+		"AI 統計（%s）\n請求：%d（成功 %d、失敗 %d、重試 %d）\n成功回覆端到端：平均 %.2fs／P50 %.2fs／P95 %.2fs\n成功回覆 AI Runtime：平均 %.2fs；供應商：平均 %.2fs\n%s\n%s",
 		label, stats.RequestCount, stats.SuccessCount, stats.FailureCount, stats.RetryCount,
 		stats.AverageEndToEndMs/1000, stats.P50EndToEndMs/1000, stats.P95EndToEndMs/1000,
-		stats.AverageRuntimeMs/1000, stats.AverageProviderMs/1000, usage,
+		stats.AverageRuntimeMs/1000, stats.AverageProviderMs/1000, usage, memoryUsage,
 	)
 	if len(providers) == 0 {
 		return result

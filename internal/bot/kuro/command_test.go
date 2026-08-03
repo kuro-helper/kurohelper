@@ -1,10 +1,10 @@
-package bot
+package kuro
 
 import (
 	"strings"
 	"testing"
 
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
 )
 
 func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
@@ -12,6 +12,7 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		"/help",
 		"/newchat",
 		"/status",
+		"/raw-responses",
 		"/memory-list",
 		"/memory-info",
 		"/memory-trash",
@@ -37,6 +38,37 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 	} {
 		if strings.Contains(kuroTextCommandHelp, command) {
 			t.Fatalf("help still contains Chinese command name %q", command)
+		}
+	}
+}
+
+func TestFormatKuroRawRepliesShowsNewestFirstAndPreservesText(t *testing.T) {
+	formatted := strings.Join(formatKuroRawReplies(servicekuro.RawRepliesResponse{
+		Entries: []servicekuro.RawReply{
+			{CachedAt: "2026-08-01T01:00:00Z", RawText: "第一則（低下頭）"},
+			{CachedAt: "2026-08-01T02:00:00Z", RawText: "第二則（耳朵抖了一下）"},
+		},
+	}), "")
+	if strings.Index(formatted, "第二則") > strings.Index(formatted, "第一則") {
+		t.Fatalf("newest reply should be shown first: %s", formatted)
+	}
+	for _, expected := range []string{"（低下頭）", "（耳朵抖了一下）", "最近 2 則"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatted raw replies are missing %q: %s", expected, formatted)
+		}
+	}
+}
+
+func TestFormatKuroRawRepliesSplitsDiscordMessages(t *testing.T) {
+	formatted := formatKuroRawReplies(servicekuro.RawRepliesResponse{
+		Entries: []servicekuro.RawReply{{RawText: strings.Repeat("原", 4000)}},
+	})
+	if len(formatted) < 2 {
+		t.Fatal("long raw replies should be split into multiple Discord messages")
+	}
+	for _, message := range formatted {
+		if len([]rune(message)) > 1900 {
+			t.Fatalf("Discord message exceeds limit: %d", len([]rune(message)))
 		}
 	}
 }

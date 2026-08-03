@@ -1,4 +1,4 @@
-package bot
+package kuro
 
 import (
 	"path/filepath"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
 )
 
 const (

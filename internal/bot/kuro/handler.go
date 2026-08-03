@@ -1,4 +1,4 @@
-package bot
+package kuro
 
 import (
 	"context"
@@ -8,18 +8,16 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"gorm.io/gorm"
 
-	botkuro "kurohelper/internal/kuro"
-	"kurohelperservice/db"
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
+	kurosvc "kurohelperservice/kuro"
 )
 
 func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate) {
 	if event == nil || event.Author == nil || event.Author.Bot {
 		return
 	}
-	if !botkuro.ChannelAllowed(event.ChannelID) {
+	if !ChannelAllowed(event.ChannelID) {
 		return
 	}
 	botID := session.State.User.ID
@@ -30,7 +28,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 			break
 		}
 	}
-	settings := botkuro.GetSettings()
+	settings := GetSettings()
 	images := collectKuroImageAttachments(event.Message)
 	if len(event.Attachments) > 0 {
 		slog.Info("Kuro Discord attachments inspected",
@@ -39,7 +37,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 			"visionImageCount", len(images),
 		)
 	}
-	content, accepted := servicekuro.PrepareTrigger(
+	content, accepted := prepareKuroTrigger(
 		event.Content,
 		settings.TriggerPrefix,
 		botID,
@@ -51,12 +49,12 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	if content == "" || (len(images) > 0 && strings.TrimSpace(content) == strings.TrimSpace(settings.TriggerPrefix)) {
 		content = "請看看附加的圖片。"
 	}
-	if command, ok := servicekuro.ParseTextCommand(event.Content, settings.TriggerPrefix); ok {
+	if command, ok := parseKuroTextCommand(event.Content, settings.TriggerPrefix); ok {
 		handleKuroTextCommand(session, event, command)
 		return
 	}
 
-	client := botkuro.Client()
+	client := Client()
 	if client == nil {
 		return
 	}
@@ -67,9 +65,9 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	}
 	acceptedAt := time.Now()
 	queueStartedAt := time.Now()
-	botkuro.LockGeneration()
+	LockGeneration()
 	botQueueMs := elapsedMilliseconds(queueStartedAt)
-	defer botkuro.UnlockGeneration()
+	defer UnlockGeneration()
 	if !client.Connected() {
 		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 已中斷連線，請稍後再試。")
 		return
@@ -77,23 +75,29 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	_ = session.ChannelTyping(event.ChannelID)
 
 	historyStartedAt := time.Now()
-	boundaryID := ""
-	state, err := db.GetKuroChannelState(db.Dbs, event.ChannelID)
-	if err == nil {
-		boundaryID = state.ContextBoundary
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+	boundaryID, err := kurosvc.GetContextBoundary(event.ChannelID)
+	if err != nil {
 		slog.Warn("讀取 Kuro 頻道上下文邊界失敗", "error", err, "channelID", event.ChannelID)
 	}
 
 	recentMessages := fetchRecentMessages(session, event, settings.RecentMessageLimit, boundaryID, settings.TriggerPrefix)
-	recentPrompt, retrievalText := servicekuro.BuildRecentContext(recentMessages, servicekuro.ContextOptions{
+	contextOptions := kuroContextOptions{
 		MessageLimit: settings.RecentMessageLimit,
 		MaxChars:     settings.RecentContextChars,
 		BoundaryID:   boundaryID,
-	})
+	}
+	recentPrompt, retrievalText := buildKuroRecentContext(recentMessages, contextOptions)
+	selectedRecentMessages := selectKuroRecentMessages(recentMessages, contextOptions)
 	displayName := messageDisplayName(event.Message)
+	for index := range images {
+		images[index].MessageID = event.ID
+		images[index].AuthorName = displayName
+	}
+	if remaining := kuroMaxVisionImages - len(images); remaining > 0 {
+		images = append(images, collectKuroRecentImages(recentMessages, contextOptions, remaining)...)
+	}
 	mentionedParticipants := mentionedUsers(event.Message, botID)
-	contextParticipants := servicekuro.CollectContextParticipants(
+	contextParticipants := collectKuroContextParticipants(
 		recentMessages,
 		servicekuro.MentionedUser{ID: event.Author.ID, DisplayName: displayName},
 		mentionedParticipants,
@@ -108,6 +112,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		DisplayName:         displayName,
 		Text:                content,
 		RecentContext:       recentPrompt,
+		RecentMessages:      selectedRecentMessages,
 		RetrievalText:       retrievalText,
 		MentionedUsers:      mentionedParticipants,
 		ContextParticipants: contextParticipants,
@@ -143,17 +148,34 @@ func fetchRecentMessages(session *discordgo.Session, current *discordgo.MessageC
 		slog.Warn("取得 Discord 近期訊息失敗", "error", err, "channelID", current.ChannelID)
 		return nil
 	}
+	messageIDs := make([]string, 0, len(messages))
+	for _, message := range messages {
+		if message != nil && message.ID != "" {
+			messageIDs = append(messageIDs, message.ID)
+		}
+	}
+	contextMessageKinds, err := kurosvc.GetContextMessageKinds(current.ChannelID, messageIDs)
+	if err != nil {
+		slog.Warn("讀取 Kuro Discord 訊息上下文分類失敗", "error", err, "channelID", current.ChannelID)
+		contextMessageKinds = nil
+	}
 	botID := session.State.User.ID
 	result := make([]servicekuro.RecentMessage, 0, len(messages))
 	for _, message := range messages {
 		if message == nil || message.Author == nil {
 			continue
 		}
+		if _, excluded := contextMessageKinds[message.ID]; excluded {
+			continue
+		}
 		assistant := message.Author.ID == botID
 		if message.Author.Bot && !assistant {
 			continue
 		}
-		if _, isCommand := servicekuro.ParseTextCommand(message.Content, triggerPrefix); isCommand {
+		if assistant && strings.TrimSpace(message.Content) == kuroNewChatConfirmation {
+			continue
+		}
+		if _, isCommand := parseKuroTextCommand(message.Content, triggerPrefix); isCommand {
 			continue
 		}
 		result = append(result, servicekuro.RecentMessage{
@@ -168,6 +190,7 @@ func fetchRecentMessages(session *discordgo.Session, current *discordgo.MessageC
 			Content:   message.Content,
 			Assistant: assistant,
 			CreatedAt: message.Timestamp,
+			Images:    collectKuroImageAttachments(message),
 		})
 	}
 	return result

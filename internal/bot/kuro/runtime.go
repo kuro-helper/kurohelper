@@ -3,7 +3,7 @@ package kuro
 import (
 	"sync"
 
-	servicekuro "kurohelperservice/kuro"
+	servicekuro "kurohelperservice/airuntime"
 )
 
 type Settings struct {
@@ -43,7 +43,7 @@ func GetSettings() Settings {
 
 func ChannelAllowed(channelID string) bool {
 	settings := GetSettings()
-	return servicekuro.IsAllowed(settings.ChannelIDs, channelID)
+	return isAllowed(settings.ChannelIDs, channelID)
 }
 
 func CommandAllowed(userID string) bool {
@@ -51,7 +51,7 @@ func CommandAllowed(userID string) bool {
 	if len(settings.CommandUserIDs) == 0 {
 		return false
 	}
-	return servicekuro.IsAllowed(settings.CommandUserIDs, userID)
+	return isAllowed(settings.CommandUserIDs, userID)
 }
 
 // LockGeneration serializes the single SillyTavern character/chat pipeline.
