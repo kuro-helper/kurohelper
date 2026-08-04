@@ -2,12 +2,21 @@ package kuro
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 
 	servicekuro "kurohelperservice/airuntime"
 )
+
+type kuroRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function kuroRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
 
 func TestCollectKuroImageAttachmentsFiltersAndCapsImages(t *testing.T) {
 	attachments := []*discordgo.MessageAttachment{
@@ -50,6 +59,80 @@ func TestResolveKuroReplyMessageUsesEmbeddedDiscordReply(t *testing.T) {
 	}}
 	if got := resolveKuroReplyMessage(nil, event); got != replied {
 		t.Fatalf("resolved reply = %#v, want embedded message", got)
+	}
+}
+
+func TestResolveKuroReplyMessageFailsOpenWhenRepliedMessageWasDeleted(t *testing.T) {
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("discordgo.New() error = %v", err)
+	}
+	requests := 0
+	session.Client = &http.Client{Transport: kuroRoundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Status:     "404 Not Found",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"message":"Unknown Message","code":10008}`)),
+		}, nil
+	})}
+	event := &discordgo.MessageCreate{Message: &discordgo.Message{
+		ID:        "current-message",
+		ChannelID: "channel-a",
+		MessageReference: &discordgo.MessageReference{
+			MessageID: "deleted-message",
+			ChannelID: "channel-a",
+		},
+	}}
+
+	if got := resolveKuroReplyMessage(session, event); got != nil {
+		t.Fatalf("resolved deleted reply = %#v, want nil", got)
+	}
+	if requests != 1 {
+		t.Fatalf("Discord message fetches = %d, want 1", requests)
+	}
+}
+
+func TestReplyImageAndCurrentMessageImageAreBothPreserved(t *testing.T) {
+	replied := &discordgo.Message{
+		ID:      "reply-message",
+		Content: "被回覆圖片的問題",
+		Author:  &discordgo.User{Username: "ReplyAuthor"},
+		Attachments: []*discordgo.MessageAttachment{{
+			ID: "reply-image", URL: "https://cdn.discordapp.com/attachments/a/b/reply.png",
+			Filename: "reply.png", ContentType: "image/png",
+		}},
+	}
+	current := &discordgo.Message{
+		ID:      "current-message",
+		Content: "小黑，比較這兩張圖",
+		Author:  &discordgo.User{Username: "CurrentAuthor"},
+		Attachments: []*discordgo.MessageAttachment{{
+			ID: "current-image", URL: "https://cdn.discordapp.com/attachments/a/b/current.png",
+			Filename: "current.png", ContentType: "image/png",
+		}},
+		ReferencedMessage: replied,
+	}
+
+	images := appendUniqueKuroImages(nil, annotateKuroImages(
+		collectKuroImageAttachments(current), current, kuroImageSourceCurrent, false,
+	), kuroMaxVisionImages)
+	images = appendUniqueKuroImages(images, annotateKuroImages(
+		collectKuroImageAttachments(replied), replied, kuroImageSourceReply, false,
+	), kuroMaxVisionImages)
+
+	if len(images) != 2 {
+		t.Fatalf("images = %#v, want current and reply images", images)
+	}
+	if images[0].ID != "current-image" || images[0].SourceKind != kuroImageSourceCurrent {
+		t.Fatalf("current image priority was lost: %#v", images[0])
+	}
+	if images[1].ID != "reply-image" || images[1].SourceKind != kuroImageSourceReply {
+		t.Fatalf("reply image metadata was lost: %#v", images[1])
+	}
+	if images[1].MessageID != "reply-message" || images[1].SourceMessageText != "被回覆圖片的問題" {
+		t.Fatalf("reply source context was lost: %#v", images[1])
 	}
 }
 
