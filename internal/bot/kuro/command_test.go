@@ -13,6 +13,11 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		"/newchat",
 		"/status",
 		"/raw-responses",
+		"/channel-list",
+		"/channel-add",
+		"/channel-remove",
+		"/guild-disable",
+		"/guild-enable",
 		"/memory-list",
 		"/memory-info",
 		"/memory-trash",
@@ -39,6 +44,12 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		if strings.Contains(kuroTextCommandHelp, command) {
 			t.Fatalf("help still contains Chinese command name %q", command)
 		}
+	}
+}
+
+func TestUnknownKuroCommandMessageDoesNotExposeHelp(t *testing.T) {
+	if strings.Contains(kuroUnknownCommandMessage, kuroTextCommandHelp) || strings.Contains(kuroUnknownCommandMessage, "/help") {
+		t.Fatalf("unknown-command response must not include command help: %s", kuroUnknownCommandMessage)
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	service "kurohelperservice"
 	servicekuro "kurohelperservice/airuntime"
 	"kurohelperservice/db"
+	servicekurostore "kurohelperservice/kuro"
 	"kurohelperservice/provider/erogs"
 	"kurohelperservice/provider/seiya"
 	"kurohelperservice/provider/ymgal"
@@ -136,6 +137,20 @@ func main() {
 	defer stopRuntime()
 	runtimeSecret := strings.TrimSpace(os.Getenv("KURO_RUNTIME_SECRET"))
 	if runtimeSecret != "" {
+		accessRules, accessErr := servicekurostore.ListAccessRules()
+		if accessErr != nil {
+			slog.Error("載入 Kuro 頻道存取規則失敗", "error", accessErr)
+			os.Exit(1)
+		}
+		channelOverrides := make(map[string]bool)
+		guildOverrides := make(map[string]bool)
+		for _, rule := range accessRules {
+			if rule.ScopeType == servicekurostore.AccessScopeGuild {
+				guildOverrides[rule.ScopeID] = rule.Enabled
+			} else if rule.ScopeType == servicekurostore.AccessScopeChannel {
+				channelOverrides[rule.ScopeID] = rule.Enabled
+			}
+		}
 		runtimeClient, runtimeErr := servicekuro.NewClient(servicekuro.Config{
 			URL:            envOrDefault("KURO_RUNTIME_URL", "ws://127.0.0.1:2334"),
 			Secret:         runtimeSecret,
@@ -152,6 +167,8 @@ func main() {
 			CommandUserIDs:     botkuro.ParseIDSet(os.Getenv("KURO_COMMAND_USER_IDS")),
 			RecentMessageLimit: utils.GetEnvInt("KURO_RECENT_MESSAGE_LIMIT", 15),
 			RecentContextChars: utils.GetEnvInt("KURO_RECENT_CONTEXT_CHARS", 6000),
+			ChannelOverrides:   channelOverrides,
+			GuildOverrides:     guildOverrides,
 		})
 		runtimeClient.Start(runtimeContext)
 		defer runtimeClient.Close()

@@ -12,6 +12,8 @@ type Settings struct {
 	CommandUserIDs     map[string]struct{}
 	RecentMessageLimit int
 	RecentContextChars int
+	ChannelOverrides   map[string]bool
+	GuildOverrides     map[string]bool
 }
 
 var state struct {
@@ -32,6 +34,12 @@ var channelGenerationLocks struct {
 }
 
 func Init(client *servicekuro.Client, settings Settings) {
+	if settings.ChannelOverrides == nil {
+		settings.ChannelOverrides = make(map[string]bool)
+	}
+	if settings.GuildOverrides == nil {
+		settings.GuildOverrides = make(map[string]bool)
+	}
 	state.Lock()
 	state.client = client
 	state.settings = settings
@@ -51,8 +59,40 @@ func GetSettings() Settings {
 }
 
 func ChannelAllowed(channelID string) bool {
+	return ConversationAllowed("", channelID)
+}
+
+// ConversationAllowed applies guild blocks first, then persistent channel
+// overrides, and finally the environment channel allow-list fallback.
+func ConversationAllowed(guildID, channelID string) bool {
 	settings := GetSettings()
+	if enabled, exists := settings.GuildOverrides[guildID]; exists && !enabled {
+		return false
+	}
+	if enabled, exists := settings.ChannelOverrides[channelID]; exists {
+		return enabled
+	}
 	return isAllowed(settings.ChannelIDs, channelID)
+}
+
+func UpdateAccessOverride(scopeType, scopeID string, enabled bool) {
+	state.Lock()
+	defer state.Unlock()
+	if scopeType == "guild" {
+		state.settings.GuildOverrides[scopeID] = enabled
+		return
+	}
+	state.settings.ChannelOverrides[scopeID] = enabled
+}
+
+func DeleteAccessOverride(scopeType, scopeID string) {
+	state.Lock()
+	defer state.Unlock()
+	if scopeType == "guild" {
+		delete(state.settings.GuildOverrides, scopeID)
+		return
+	}
+	delete(state.settings.ChannelOverrides, scopeID)
 }
 
 func CommandAllowed(userID string) bool {

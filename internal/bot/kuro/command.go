@@ -18,12 +18,19 @@ const kuroMemoryPageSize = 5
 
 const kuroNewChatConfirmation = "已開始新的短期對話；長期記憶不會被刪除。"
 
+const kuroUnknownCommandMessage = "未知的 Kuro 指令。"
+
 const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /help — 列出這份指令說明
 小黑 /newchat — 開始新的短期對話
 小黑 /status — 查看 AI Runtime 狀態
 小黑 /ai-stats [24h|7d|30d] — 查看 AI 延遲、Token 與費用統計
-小黑 /raw-responses — 查看最近五則模型原始回覆
+小黑 /raw-responses [頻道ID] — 查看指定頻道最近五則模型原始回覆
+小黑 /channel-list [群組ID] — 列出群組名稱、群組ID、頻道名稱與頻道ID
+小黑 /channel-add <頻道ID> — 啟用指定頻道的 Kuro 對話
+小黑 /channel-remove <頻道ID> — 停用指定頻道的 Kuro 對話
+小黑 /guild-disable <群組ID> — 停用指定群組的 Kuro 對話
+小黑 /guild-enable <群組ID> — 恢復指定群組的 Kuro 對話
 小黑 /memory-list [頁碼] — 分頁列出有效記憶
 小黑 /memory-info <記憶ID> — 查看單筆記憶的詳細資訊
 小黑 /memory-trash [頁碼] — 分頁列出記憶垃圾桶
@@ -81,6 +88,10 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		return
 	}
 
+	if handleKuroAccessCommand(session, event, command) {
+		return
+	}
+
 	client := Client()
 	if client == nil || !client.Connected() {
 		sendKuroCommandMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線。")
@@ -112,12 +123,20 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 			content = formatKuroRuntimeStatus(health)
 		}
 	case "raw-responses":
-		if len(command.Args) != 0 {
-			content = "用法：小黑 /raw-responses"
+		if len(command.Args) > 1 || (len(command.Args) == 1 && !validDiscordID(command.Args[0])) {
+			content = "用法：小黑 /raw-responses [頻道ID]"
 			break
 		}
+		targetChannelID := event.ChannelID
+		if len(command.Args) == 1 {
+			targetChannelID = command.Args[0]
+			if channel, channelErr := session.Channel(targetChannelID); channelErr != nil || channel == nil {
+				content = "找不到 Bot 可存取的 Discord 頻道。"
+				break
+			}
+		}
 		var result servicekuro.RawRepliesResponse
-		result, err = client.ListRawReplies(ctx)
+		result, err = client.ListRawReplies(ctx, targetChannelID)
 		if err == nil {
 			for _, message := range formatKuroRawReplies(result) {
 				sendKuroCommandMessage(session, event.ChannelID, message)
@@ -219,7 +238,7 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 			content = formatKuroBackupRestore(result)
 		}
 	default:
-		content = "未知的 Kuro 指令。\n\n" + kuroTextCommandHelp
+		content = kuroUnknownCommandMessage
 	}
 
 	if err != nil {

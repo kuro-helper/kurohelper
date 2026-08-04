@@ -17,7 +17,12 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	if event == nil || event.Author == nil || event.Author.Bot {
 		return
 	}
-	if !ChannelAllowed(event.ChannelID) {
+	settings := GetSettings()
+	if command, ok := parseKuroTextCommand(event.Content, settings.TriggerPrefix); ok {
+		handleKuroTextCommand(session, event, command)
+		return
+	}
+	if !ConversationAllowed(event.GuildID, event.ChannelID) {
 		return
 	}
 	botID := session.State.User.ID
@@ -28,7 +33,6 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 			break
 		}
 	}
-	settings := GetSettings()
 	currentImages := collectKuroImageAttachments(event.Message)
 	if len(event.Attachments) > 0 {
 		slog.Info("Kuro Discord attachments inspected",
@@ -44,10 +48,6 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		mentioned,
 	)
 	if !accepted {
-		return
-	}
-	if command, ok := parseKuroTextCommand(event.Content, settings.TriggerPrefix); ok {
-		handleKuroTextCommand(session, event, command)
 		return
 	}
 	repliedMessage := resolveKuroReplyMessage(session, event)
