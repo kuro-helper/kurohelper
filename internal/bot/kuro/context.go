@@ -136,6 +136,8 @@ func collectKuroRecentImages(messages []servicekuro.RecentMessage, options kuroC
 			seen[key] = struct{}{}
 			image.MessageID = message.ID
 			image.AuthorName = message.DisplayName
+			image.SourceKind = kuroImageSourceRecent
+			image.SourceMessageText = message.Content
 			image.ContextOnly = true
 			result = append(result, image)
 			if len(result) == maxImages {

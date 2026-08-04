@@ -46,13 +46,13 @@ func TestFormatKuroRawRepliesShowsNewestFirstAndPreservesText(t *testing.T) {
 	formatted := strings.Join(formatKuroRawReplies(servicekuro.RawRepliesResponse{
 		Entries: []servicekuro.RawReply{
 			{CachedAt: "2026-08-01T01:00:00Z", RawText: "第一則（低下頭）"},
-			{CachedAt: "2026-08-01T02:00:00Z", RawText: "第二則（耳朵抖了一下）"},
+			{CachedAt: "2026-08-01T02:00:00Z", RawText: "第二則（耳朵抖了一下）", Source: "vision"},
 		},
 	}), "")
 	if strings.Index(formatted, "第二則") > strings.Index(formatted, "第一則") {
 		t.Fatalf("newest reply should be shown first: %s", formatted)
 	}
-	for _, expected := range []string{"（低下頭）", "（耳朵抖了一下）", "最近 2 則"} {
+	for _, expected := range []string{"（低下頭）", "（耳朵抖了一下）", "最近 2 則", "主模型", "Vision"} {
 		if !strings.Contains(formatted, expected) {
 			t.Fatalf("formatted raw replies are missing %q: %s", expected, formatted)
 		}

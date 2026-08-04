@@ -29,12 +29,12 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		}
 	}
 	settings := GetSettings()
-	images := collectKuroImageAttachments(event.Message)
+	currentImages := collectKuroImageAttachments(event.Message)
 	if len(event.Attachments) > 0 {
 		slog.Info("Kuro Discord attachments inspected",
 			"requestID", event.ID,
 			"attachmentCount", len(event.Attachments),
-			"visionImageCount", len(images),
+			"visionImageCount", len(currentImages),
 		)
 	}
 	content, accepted := prepareKuroTrigger(
@@ -43,15 +43,20 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		botID,
 		mentioned,
 	)
-	if !accepted || (content == "" && len(images) == 0) {
+	if !accepted {
 		return
-	}
-	if content == "" || (len(images) > 0 && strings.TrimSpace(content) == strings.TrimSpace(settings.TriggerPrefix)) {
-		content = "請看看附加的圖片。"
 	}
 	if command, ok := parseKuroTextCommand(event.Content, settings.TriggerPrefix); ok {
 		handleKuroTextCommand(session, event, command)
 		return
+	}
+	repliedMessage := resolveKuroReplyMessage(session, event)
+	replyImages := collectKuroImageAttachments(repliedMessage)
+	if content == "" && len(currentImages) == 0 && len(replyImages) == 0 {
+		return
+	}
+	if content == "" || ((len(currentImages) > 0 || len(replyImages) > 0) && strings.TrimSpace(content) == strings.TrimSpace(settings.TriggerPrefix)) {
+		content = "請看看附加的圖片。"
 	}
 
 	client := Client()
@@ -65,9 +70,9 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	}
 	acceptedAt := time.Now()
 	queueStartedAt := time.Now()
-	LockGeneration()
+	unlockGeneration := LockChannelGeneration(event.ChannelID)
 	botQueueMs := elapsedMilliseconds(queueStartedAt)
-	defer UnlockGeneration()
+	defer unlockGeneration()
 	if !client.Connected() {
 		sendKuroMessage(session, event.ChannelID, "Kuro AI Runtime 已中斷連線，請稍後再試。")
 		return
@@ -89,13 +94,23 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	recentPrompt, retrievalText := buildKuroRecentContext(recentMessages, contextOptions)
 	selectedRecentMessages := selectKuroRecentMessages(recentMessages, contextOptions)
 	displayName := messageDisplayName(event.Message)
-	for index := range images {
-		images[index].MessageID = event.ID
-		images[index].AuthorName = displayName
-	}
-	if remaining := kuroMaxVisionImages - len(images); remaining > 0 {
-		images = append(images, collectKuroRecentImages(recentMessages, contextOptions, remaining)...)
-	}
+	images := appendUniqueKuroImages(nil, annotateKuroImages(
+		currentImages,
+		event.Message,
+		kuroImageSourceCurrent,
+		false,
+	), kuroMaxVisionImages)
+	images = appendUniqueKuroImages(images, annotateKuroImages(
+		replyImages,
+		repliedMessage,
+		kuroImageSourceReply,
+		false,
+	), kuroMaxVisionImages)
+	images = appendUniqueKuroImages(
+		images,
+		collectKuroRecentImages(recentMessages, contextOptions, kuroMaxVisionImages),
+		kuroMaxVisionImages,
+	)
 	mentionedParticipants := mentionedUsers(event.Message, botID)
 	contextParticipants := collectKuroContextParticipants(
 		recentMessages,

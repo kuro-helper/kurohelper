@@ -20,7 +20,16 @@ var state struct {
 	settings Settings
 }
 
-var generationMu sync.Mutex
+type channelGenerationLock struct {
+	refs int
+	tail chan struct{}
+}
+
+var generationGate sync.RWMutex
+var channelGenerationLocks struct {
+	sync.Mutex
+	locks map[string]*channelGenerationLock
+}
 
 func Init(client *servicekuro.Client, settings Settings) {
 	state.Lock()
@@ -54,11 +63,43 @@ func CommandAllowed(userID string) bool {
 	return isAllowed(settings.CommandUserIDs, userID)
 }
 
-// LockGeneration serializes the single SillyTavern character/chat pipeline.
-func LockGeneration() {
-	generationMu.Lock()
+// LockChannelGeneration keeps messages in one Discord channel FIFO while the
+// runtime's independent SillyTavern workers serve other channels in parallel.
+func LockChannelGeneration(channelID string) func() {
+	channelGenerationLocks.Lock()
+	if channelGenerationLocks.locks == nil {
+		channelGenerationLocks.locks = make(map[string]*channelGenerationLock)
+	}
+	entry := channelGenerationLocks.locks[channelID]
+	if entry == nil {
+		ready := make(chan struct{})
+		close(ready)
+		entry = &channelGenerationLock{tail: ready}
+		channelGenerationLocks.locks[channelID] = entry
+	}
+	entry.refs++
+	previous := entry.tail
+	done := make(chan struct{})
+	entry.tail = done
+	channelGenerationLocks.Unlock()
+
+	<-previous
+	generationGate.RLock()
+	return func() {
+		generationGate.RUnlock()
+		close(done)
+		channelGenerationLocks.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(channelGenerationLocks.locks, channelID)
+		}
+		channelGenerationLocks.Unlock()
+	}
 }
 
-func UnlockGeneration() {
-	generationMu.Unlock()
+// LockAllGenerations is reserved for maintenance that must not overlap any
+// memory recall or generation, such as replacing the complete memory store.
+func LockAllGenerations() func() {
+	generationGate.Lock()
+	return generationGate.Unlock
 }

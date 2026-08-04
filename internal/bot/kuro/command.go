@@ -50,8 +50,8 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 			sendKuroCommandMessage(session, event.ChannelID, "用法：小黑 /newchat")
 			return
 		}
-		LockGeneration()
-		defer UnlockGeneration()
+		unlockGeneration := LockChannelGeneration(event.ChannelID)
+		defer unlockGeneration()
 		if err := kurosvc.SetContextBoundary(event.ChannelID, event.ID); err != nil {
 			sendKuroCommandMessage(session, event.ChannelID, "建立新對話失敗，請稍後再試。")
 			return
@@ -87,8 +87,8 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		return
 	}
 	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-clear" || command.Name == "memory-backup" || command.Name == "memory-rollback" {
-		LockGeneration()
-		defer UnlockGeneration()
+		unlockGeneration := LockAllGenerations()
+		defer unlockGeneration()
 	}
 
 	timeout := 15 * time.Second
@@ -109,7 +109,7 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		var health servicekuro.HealthResponse
 		health, err = client.Health(ctx)
 		if err == nil {
-			content = fmt.Sprintf("Runtime：%s\nSillyTavern：%t\n長期記憶：%t", health.Status, health.SillyTavernReady, health.MemoryEnabled)
+			content = formatKuroRuntimeStatus(health)
 		}
 	case "raw-responses":
 		if len(command.Args) != 0 {
@@ -258,7 +258,11 @@ func formatKuroRawReplies(result servicekuro.RawRepliesResponse) []string {
 		entry := entries[index]
 		number := len(entries) - index
 		cachedAt := formatKuroMemoryTime(entry.CachedAt)
-		blocks = append(blocks, fmt.Sprintf("#%d｜%s\n%s", number, cachedAt, entry.RawText))
+		source := "主模型"
+		if strings.EqualFold(strings.TrimSpace(entry.Source), "vision") {
+			source = "Vision"
+		}
+		blocks = append(blocks, fmt.Sprintf("#%d｜%s｜%s\n%s", number, source, cachedAt, entry.RawText))
 	}
 	return splitKuroText(strings.Join(blocks, "\n\n──────────\n\n"), 1900)
 }
@@ -373,6 +377,39 @@ func kuroAIStatsPeriod(args []string) (time.Duration, string, bool) {
 	}
 }
 
+func formatKuroRuntimeStatus(health servicekuro.HealthResponse) string {
+	result := fmt.Sprintf(
+		"Runtime：%s\nSillyTavern：%t\n長期記憶：%t",
+		health.Status,
+		health.SillyTavernReady,
+		health.MemoryEnabled,
+	)
+	cache := health.VisionCache
+	if cache == nil {
+		return result
+	}
+	mode := "記憶體"
+	if cache.Persistent {
+		mode = "持久化"
+	}
+	return fmt.Sprintf(
+		"%s\nVision 快取：%s／%s，%d/%d 張圖片、%d 筆（OCR %d、觀察 %d）\n快取命中：%d/%d（%.1f%%）；淘汰圖片 %d、項目 %d",
+		result,
+		map[bool]string{true: "啟用", false: "停用"}[cache.Enabled],
+		mode,
+		cache.Images,
+		cache.MaxImages,
+		cache.Entries,
+		cache.OCREntries,
+		cache.ObservationEntries,
+		cache.Hits,
+		cache.Hits+cache.Misses,
+		cache.HitRate*100,
+		cache.EvictedImages,
+		cache.EvictedEntries,
+	)
+}
+
 func formatKuroAIStats(stats kurosvc.AIStats, providers []kurosvc.AIProviderStats, label string) string {
 	if stats.RequestCount == 0 {
 		return fmt.Sprintf("AI 統計（%s）\n目前還沒有生成紀錄。", label)
@@ -394,11 +431,19 @@ func formatKuroAIStats(stats kurosvc.AIStats, providers []kurosvc.AIProviderStat
 		stats.MemoryExtractionTotalTokens,
 		stats.MemoryExtractionCostUSD,
 	)
+	visionUsage := fmt.Sprintf(
+		"Vision：%d 次，輸入 %d／輸出 %d／合計 %d Token，US$ %.6f",
+		stats.VisionGenerationCount,
+		stats.VisionPromptTokens,
+		stats.VisionCompletionTokens,
+		stats.VisionTotalTokens,
+		stats.VisionCostUSD,
+	)
 	result := fmt.Sprintf(
-		"AI 統計（%s）\n請求：%d（成功 %d、失敗 %d、重試 %d）\n成功回覆端到端：平均 %.2fs／P50 %.2fs／P95 %.2fs\n成功回覆 AI Runtime：平均 %.2fs；供應商：平均 %.2fs\n%s\n%s",
+		"AI 統計（%s）\n請求：%d（成功 %d、失敗 %d、重試 %d）\n成功回覆端到端：平均 %.2fs／P50 %.2fs／P95 %.2fs\n成功回覆 AI Runtime：平均 %.2fs；供應商：平均 %.2fs\n%s\n%s\n%s",
 		label, stats.RequestCount, stats.SuccessCount, stats.FailureCount, stats.RetryCount,
 		stats.AverageEndToEndMs/1000, stats.P50EndToEndMs/1000, stats.P95EndToEndMs/1000,
-		stats.AverageRuntimeMs/1000, stats.AverageProviderMs/1000, usage, memoryUsage,
+		stats.AverageRuntimeMs/1000, stats.AverageProviderMs/1000, usage, memoryUsage, visionUsage,
 	)
 	if len(providers) == 0 {
 		return result

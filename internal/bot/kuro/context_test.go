@@ -50,4 +50,7 @@ func TestKuroRecentContextIncludesImageOnlyMessages(t *testing.T) {
 	if len(images) != 2 || images[0].ID != "image-2" || images[1].ID != "image-1" || !images[0].ContextOnly {
 		t.Fatalf("unexpected recent images: %#v", images)
 	}
+	if images[1].SourceKind != kuroImageSourceRecent || images[1].SourceMessageText != "看這張" {
+		t.Fatalf("recent image source metadata missing: %#v", images[1])
+	}
 }
