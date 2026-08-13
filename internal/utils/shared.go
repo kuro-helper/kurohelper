@@ -21,7 +21,7 @@ const (
 )
 
 const (
-	PlaceholderImageURL = "https://image.kurohelper.com/docs/neneGIF.gif"
+	PlaceholderImageURL = "https://cdn.kurohelper.com/docs/neneGIF.gif"
 )
 
 // 資料分頁

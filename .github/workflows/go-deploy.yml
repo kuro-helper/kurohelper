@@ -21,4 +21,5 @@ jobs:
     uses: kuro-helper/.github/.github/workflows/go-deploy.yml@main
     with:
       kurohelperservice_ref: ${{ inputs.kurohelperservice_ref }}
+      linux_binary_name: ${{ format('{0}-linux-amd64', github.event.repository.name) }}
     secrets: inherit
