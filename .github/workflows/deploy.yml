@@ -1,4 +1,4 @@
-name: Go Deploy
+name: Deploy
 
 on:
   workflow_dispatch:
@@ -14,12 +14,22 @@ permissions:
   actions: read
 
 jobs:
-  go-deploy:
+  build:
+    permissions:
+      contents: read
+      actions: write
+    uses: kuro-helper/.github/.github/workflows/go-build.yml@main
+    with:
+      use_kurohelperservice: ${{ inputs.kurohelperservice_ref }}
+      linux_binary_name: ${{ format('{0}-linux-amd64', github.event.repository.name) }}
+
+  deploy:
+    needs: build
     permissions:
       contents: read
       actions: write
     uses: kuro-helper/.github/.github/workflows/go-deploy.yml@main
     with:
-      kurohelperservice_ref: ${{ inputs.kurohelperservice_ref }}
       linux_binary_name: ${{ format('{0}-linux-amd64', github.event.repository.name) }}
+      systemd_service: ${{ github.event.repository.name }}
     secrets: inherit
