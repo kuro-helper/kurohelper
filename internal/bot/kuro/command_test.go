@@ -19,6 +19,8 @@ func TestKuroTextCommandHelpUsesEnglishCommandNames(t *testing.T) {
 		"/guild-disable",
 		"/guild-enable",
 		"/memory-list",
+		"/memory-pending",
+		"/memory-resolve",
 		"/memory-info",
 		"/memory-trash",
 		"/forget",
@@ -127,6 +129,36 @@ func TestFormatKuroMemoriesRejectsOutOfRangePage(t *testing.T) {
 	formatted := formatKuroMemories(servicekuro.MemoryResponse{Count: 12}, true, 4, 5)
 	if !strings.Contains(formatted, "頁碼超出範圍") || !strings.Contains(formatted, "3 頁") {
 		t.Fatalf("unexpected out-of-range message: %s", formatted)
+	}
+}
+
+func TestFormatKuroPendingMemoriesShowsConflictEvidence(t *testing.T) {
+	formatted := formatKuroPendingMemories(servicekuro.MemoryResponse{
+		Count: 1,
+		Memories: []servicekuro.Memory{{
+			ID: "pending123456", ConflictMemoryID: "active123456",
+			Value: "Tommy 不再喜歡紅茶。", ConflictSimilarity: 0.91, EvidenceCount: 2,
+		}},
+	}, 1, 5)
+	for _, expected := range []string{"`pending1`", "`active12`", "相似度 0.91", "證據 2", "/memory-resolve"} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatted pending memory is missing %q: %s", expected, formatted)
+		}
+	}
+}
+
+func TestFormatKuroMemoryResolution(t *testing.T) {
+	for resolution, expected := range map[string]string{
+		"keep_new": "採用新記憶",
+		"keep_old": "保留舊記憶",
+		"coexist":  "共存",
+	} {
+		formatted := formatKuroMemoryResolution(servicekuro.MemoryResponse{
+			Status: "resolved", Resolution: resolution,
+		})
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("resolution %s is missing %q: %s", resolution, expected, formatted)
+		}
 	}
 }
 

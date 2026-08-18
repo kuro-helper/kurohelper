@@ -54,3 +54,62 @@ func TestKuroRecentContextIncludesImageOnlyMessages(t *testing.T) {
 		t.Fatalf("recent image source metadata missing: %#v", images[1])
 	}
 }
+
+func TestKuroRecentContextPreservesDiscordReplyRelationship(t *testing.T) {
+	now := time.Now()
+	messages := []servicekuro.RecentMessage{
+		{
+			ID:          "102",
+			DisplayName: "Kuro",
+			Content:     "……嗯，我在。",
+			Assistant:   true,
+			CreatedAt:   now,
+		},
+		{
+			ID:          "103",
+			DisplayName: "肉圓",
+			Content:     "現在早上了啦",
+			CreatedAt:   now.Add(time.Second),
+			ReplyTo: &servicekuro.ReplyReference{
+				MessageID:   "102",
+				DisplayName: "Kuro",
+				Content:     "……嗯，我在。",
+				Assistant:   true,
+			},
+		},
+	}
+
+	_, retrieval := buildKuroRecentContext(
+		messages,
+		kuroContextOptions{MessageLimit: 15, MaxChars: 6000},
+	)
+	if !strings.Contains(retrieval, "[肉圓｜回覆 Kuro 的「……嗯，我在。」] 現在早上了啦") {
+		t.Fatalf("reply relationship missing from context: %s", retrieval)
+	}
+	selected := selectKuroRecentMessages(
+		messages,
+		kuroContextOptions{MessageLimit: 15, MaxChars: 6000},
+	)
+	if len(selected) != 2 || selected[1].ReplyTo == nil || selected[1].ReplyTo.MessageID != "102" {
+		t.Fatalf("structured reply relationship was lost: %#v", selected)
+	}
+}
+
+func TestKuroRecentContextMarksUnavailableReply(t *testing.T) {
+	_, retrieval := buildKuroRecentContext(
+		[]servicekuro.RecentMessage{{
+			ID:          "103",
+			DisplayName: "肉圓",
+			Content:     "這則怎麼不見了",
+			CreatedAt:   time.Now(),
+			ReplyTo: &servicekuro.ReplyReference{
+				MessageID:   "101",
+				Unavailable: true,
+			},
+		}},
+		kuroContextOptions{MessageLimit: 15, MaxChars: 6000},
+	)
+	if !strings.Contains(retrieval, "回覆一則已無法取得的訊息") {
+		t.Fatalf("unavailable reply marker missing: %s", retrieval)
+	}
+}

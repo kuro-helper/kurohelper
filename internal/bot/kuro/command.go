@@ -32,6 +32,8 @@ const kuroTextCommandHelp = `Kuro 可用指令：
 小黑 /guild-disable <群組ID> — 停用指定群組的 Kuro 對話
 小黑 /guild-enable <群組ID> — 恢復指定群組的 Kuro 對話
 小黑 /memory-list [頁碼] — 分頁列出有效記憶
+小黑 /memory-pending [頁碼] — 列出等待確認的衝突記憶
+小黑 /memory-resolve <記憶ID> <keep-new|keep-old|coexist> — 解決記憶衝突
 小黑 /memory-info <記憶ID> — 查看單筆記憶的詳細資訊
 小黑 /memory-trash [頁碼] — 分頁列出記憶垃圾桶
 小黑 /forget <記憶ID> — 將記憶移入垃圾桶
@@ -97,7 +99,7 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		sendKuroCommandMessage(session, event.ChannelID, "Kuro AI Runtime 目前未連線。")
 		return
 	}
-	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-clear" || command.Name == "memory-backup" || command.Name == "memory-rollback" {
+	if command.Name == "forget" || command.Name == "restore" || command.Name == "memory-resolve" || command.Name == "memory-clear" || command.Name == "memory-backup" || command.Name == "memory-rollback" {
 		unlockGeneration := LockAllGenerations()
 		defer unlockGeneration()
 	}
@@ -158,6 +160,17 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 		if err == nil {
 			content = formatKuroMemories(result, status == "deleted", page, kuroMemoryPageSize)
 		}
+	case "memory-pending":
+		page, valid := textCommandPage(command.Args)
+		if !valid {
+			content = "用法：小黑 /memory-pending [頁碼]"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.ListMemories(ctx, "pending", kuroMemoryPageSize, (page-1)*kuroMemoryPageSize)
+		if err == nil {
+			content = formatKuroPendingMemories(result, page, kuroMemoryPageSize)
+		}
 	case "memory-info":
 		if len(command.Args) != 1 || len(command.Args[0]) < 6 {
 			content = "用法：小黑 /memory-info <記憶ID>"
@@ -187,6 +200,21 @@ func handleKuroTextCommand(session *discordgo.Session, event *discordgo.MessageC
 			if err == nil {
 				content = formatKuroMemoryAction(result, "已復原")
 			}
+		}
+	case "memory-resolve":
+		if len(command.Args) != 2 || len(command.Args[0]) < 6 {
+			content = "用法：小黑 /memory-resolve <記憶ID> <keep-new|keep-old|coexist>"
+			break
+		}
+		resolution := strings.ReplaceAll(strings.ToLower(command.Args[1]), "-", "_")
+		if resolution != "keep_new" && resolution != "keep_old" && resolution != "coexist" {
+			content = "處理方式只能是 keep-new、keep-old 或 coexist。"
+			break
+		}
+		var result servicekuro.MemoryResponse
+		result, err = client.ResolveMemory(ctx, command.Args[0], resolution)
+		if err == nil {
+			content = formatKuroMemoryResolution(result)
 		}
 	case "memory-clear":
 		if len(command.Args) != 1 || !textCommandConfirmed(command.Args[0]) {
@@ -496,6 +524,7 @@ func formatKuroMemoryDetail(result servicekuro.MemoryResponse) string {
 	memory := result.Memory
 	statusLabels := map[string]string{
 		"active":     "有效",
+		"pending":    "等待衝突確認",
 		"deleted":    "垃圾桶",
 		"forgotten":  "已遺忘",
 		"superseded": "已被新版取代",
@@ -544,6 +573,14 @@ func formatKuroMemoryDetail(result servicekuro.MemoryResponse) string {
 	}
 	if memory.SupersedesID != "" {
 		lines = append(lines, fmt.Sprintf("取代舊記憶：`%s`", memory.SupersedesID))
+	}
+	if memory.ConflictMemoryID != "" {
+		lines = append(lines,
+			fmt.Sprintf("衝突記憶：`%s`（%s，相似度 %.2f，%d 份證據）",
+				memory.ConflictMemoryID, memory.ConflictType, memory.ConflictSimilarity, memory.EvidenceCount))
+	}
+	if memory.ResolutionNote != "" {
+		lines = append(lines, fmt.Sprintf("衝突處理：%s", memory.ResolutionNote))
 	}
 	if memory.PurgeAfter != "" {
 		lines = append(lines, fmt.Sprintf("預計永久清除：%s", formatKuroMemoryTime(memory.PurgeAfter)))
@@ -615,6 +652,42 @@ func formatKuroMemories(result servicekuro.MemoryResponse, trash bool, page, pag
 	return truncateKuroText(strings.Join(lines, "\n"), 1900)
 }
 
+func formatKuroPendingMemories(result servicekuro.MemoryResponse, page, pageSize int) string {
+	total := result.Count
+	minimumTotal := (page-1)*pageSize + len(result.Memories)
+	if total < minimumTotal {
+		total = minimumTotal
+	}
+	if len(result.Memories) == 0 {
+		if total > 0 {
+			return fmt.Sprintf("頁碼超出範圍；目前共有 %d 條待確認衝突。", total)
+		}
+		return "目前沒有等待確認的記憶衝突。"
+	}
+	totalPages := (total + pageSize - 1) / pageSize
+	lines := []string{fmt.Sprintf("待確認記憶衝突（第 %d/%d 頁，共 %d 條）：", page, totalPages, total)}
+	for _, memory := range result.Memories {
+		id := memory.ID
+		if len(id) > 8 {
+			id = id[:8]
+		}
+		conflictID := memory.ConflictMemoryID
+		if len(conflictID) > 8 {
+			conflictID = conflictID[:8]
+		}
+		lines = append(lines, fmt.Sprintf(
+			"`%s` ↔ `%s` [相似度 %.2f｜證據 %d] %s",
+			id, conflictID, memory.ConflictSimilarity, memory.EvidenceCount,
+			truncateKuroText(memory.Value, 190),
+		))
+	}
+	lines = append(lines,
+		"使用 `小黑 /memory-info <記憶ID>` 查看內容；",
+		"再用 `小黑 /memory-resolve <記憶ID> <keep-new|keep-old|coexist>` 處理。",
+	)
+	return truncateKuroText(strings.Join(lines, "\n"), 1900)
+}
+
 func kuroMemoryCategoryLabel(category string) string {
 	labels := map[string]string{
 		"conversation_event":     "對話事件",
@@ -648,6 +721,24 @@ func formatKuroMemoryAction(result servicekuro.MemoryResponse, success string) s
 		return "ID 前綴符合多條記憶，請輸入更多字元。"
 	}
 	return "找不到相符的記憶。"
+}
+
+func formatKuroMemoryResolution(result servicekuro.MemoryResponse) string {
+	if result.Status == "resolved" {
+		labels := map[string]string{
+			"keep_new": "已採用新記憶，舊記憶標為已取代",
+			"keep_old": "已保留舊記憶，候選記憶不再生效",
+			"coexist":  "已允許兩條記憶共存",
+		}
+		return labels[result.Resolution] + "。"
+	}
+	if result.Status == "stale_conflict" {
+		return "原本衝突的有效記憶已變更，請重新檢查這筆候選記憶。"
+	}
+	if result.Status == "ambiguous" {
+		return "ID 前綴符合多條候選記憶，請輸入更多字元。"
+	}
+	return "找不到相符的待確認記憶。"
 }
 
 func truncateKuroText(value string, max int) string {

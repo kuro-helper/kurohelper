@@ -62,6 +62,27 @@ func TestResolveKuroReplyMessageUsesEmbeddedDiscordReply(t *testing.T) {
 	}
 }
 
+func TestBuildKuroReplyReferencePreservesSpeakerTextAndImages(t *testing.T) {
+	reference := buildKuroReplyReference(
+		&discordgo.Message{
+			ID:      "reply-message",
+			Content: "……嗯，我在。",
+			Author:  &discordgo.User{ID: "bot-user", Username: "Bot"},
+			Attachments: []*discordgo.MessageAttachment{{
+				ID: "image", URL: "https://cdn.discordapp.com/a.png", ContentType: "image/png",
+			}},
+		},
+		nil,
+		"bot-user",
+	)
+	if reference == nil || reference.DisplayName != "Kuro" || !reference.Assistant {
+		t.Fatalf("reply author metadata missing: %#v", reference)
+	}
+	if reference.Content != "……嗯，我在。" || reference.ImageCount != 1 {
+		t.Fatalf("reply content metadata missing: %#v", reference)
+	}
+}
+
 func TestResolveKuroReplyMessageFailsOpenWhenRepliedMessageWasDeleted(t *testing.T) {
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {

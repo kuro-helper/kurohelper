@@ -61,7 +61,11 @@ func buildKuroRecentContext(messages []servicekuro.RecentMessage, options kuroCo
 				content += " " + marker
 			}
 		}
-		line := fmt.Sprintf("[%s] %s", message.DisplayName, content)
+		speaker := message.DisplayName
+		if replyLabel := formatKuroReplyLabel(message.ReplyTo); replyLabel != "" {
+			speaker += "｜" + replyLabel
+		}
+		line := fmt.Sprintf("[%s] %s", speaker, content)
 		lineLength := utf8.RuneCountInString(line)
 		if len(lines) > 0 && used+lineLength+1 > maxChars {
 			break
@@ -97,7 +101,11 @@ func selectKuroRecentMessages(messages []servicekuro.RecentMessage, options kuro
 		if len(message.Images) > 0 {
 			markerLength = utf8.RuneCountInString(fmt.Sprintf(" [附有 %d 張圖片；Discord 訊息 ID=%s]", len(message.Images), message.ID))
 		}
-		fixedLength := utf8.RuneCountInString(message.DisplayName) + 3 + markerLength
+		replyLength := utf8.RuneCountInString(formatKuroReplyLabel(message.ReplyTo))
+		if replyLength > 0 {
+			replyLength += 1
+		}
+		fixedLength := utf8.RuneCountInString(message.DisplayName) + replyLength + 3 + markerLength
 		lineLength := fixedLength + utf8.RuneCountInString(message.Content)
 		if len(selected) > 0 && used+lineLength+1 > maxChars {
 			break
@@ -162,6 +170,7 @@ func filterKuroRecentMessages(messages []servicekuro.RecentMessage, options kuro
 	for _, message := range messages {
 		message.Content = cleanKuroContextText(message.Content, 1500)
 		message.DisplayName = cleanKuroContextText(message.DisplayName, 64)
+		message.ReplyTo = cleanKuroReplyReference(message.ReplyTo)
 		if message.ID == "" || (message.Content == "" && len(message.Images) == 0) || strings.HasPrefix(message.Content, "/") {
 			continue
 		}
@@ -180,6 +189,48 @@ func filterKuroRecentMessages(messages []servicekuro.RecentMessage, options kuro
 		filtered = filtered[len(filtered)-limit:]
 	}
 	return filtered, maxChars
+}
+
+func cleanKuroReplyReference(reply *servicekuro.ReplyReference) *servicekuro.ReplyReference {
+	if reply == nil {
+		return nil
+	}
+	cleaned := *reply
+	cleaned.MessageID = cleanKuroContextText(cleaned.MessageID, 100)
+	cleaned.UserID = cleanKuroContextText(cleaned.UserID, 100)
+	cleaned.DisplayName = cleanKuroContextText(cleaned.DisplayName, 64)
+	cleaned.Content = cleanKuroContextText(cleaned.Content, 300)
+	if cleaned.ImageCount < 0 {
+		cleaned.ImageCount = 0
+	}
+	if cleaned.ImageCount > kuroMaxVisionImages {
+		cleaned.ImageCount = kuroMaxVisionImages
+	}
+	if cleaned.MessageID == "" && cleaned.DisplayName == "" && cleaned.Content == "" && cleaned.ImageCount == 0 {
+		return nil
+	}
+	return &cleaned
+}
+
+func formatKuroReplyLabel(reply *servicekuro.ReplyReference) string {
+	reply = cleanKuroReplyReference(reply)
+	if reply == nil {
+		return ""
+	}
+	if reply.Unavailable {
+		return "回覆一則已無法取得的訊息"
+	}
+	name := reply.DisplayName
+	if name == "" {
+		name = "某位使用者"
+	}
+	if reply.Content != "" {
+		return fmt.Sprintf("回覆 %s 的「%s」", name, truncateKuroContextRunes(reply.Content, 120))
+	}
+	if reply.ImageCount > 0 {
+		return fmt.Sprintf("回覆 %s 的圖片訊息", name)
+	}
+	return fmt.Sprintf("回覆 %s 的訊息", name)
 }
 
 func cleanKuroContextText(value string, maxLength int) string {

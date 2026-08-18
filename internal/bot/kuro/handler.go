@@ -52,6 +52,11 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 	}
 	repliedMessage := resolveKuroReplyMessage(session, event)
 	replyImages := collectKuroImageAttachments(repliedMessage)
+	replyReference := buildKuroReplyReference(
+		repliedMessage,
+		event.MessageReference,
+		botID,
+	)
 	if content == "" && len(currentImages) == 0 && len(replyImages) == 0 {
 		return
 	}
@@ -132,6 +137,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		MentionedUsers:      mentionedParticipants,
 		ContextParticipants: contextParticipants,
 		Images:              images,
+		ReplyTo:             replyReference,
 	})
 	runtimeRoundTripMs := elapsedMilliseconds(runtimeStartedAt)
 	if err != nil {
@@ -175,6 +181,12 @@ func fetchRecentMessages(session *discordgo.Session, current *discordgo.MessageC
 		contextMessageKinds = nil
 	}
 	botID := session.State.User.ID
+	messagesByID := make(map[string]*discordgo.Message, len(messages))
+	for _, message := range messages {
+		if message != nil && message.ID != "" {
+			messagesByID[message.ID] = message
+		}
+	}
 	result := make([]servicekuro.RecentMessage, 0, len(messages))
 	for _, message := range messages {
 		if message == nil || message.Author == nil {
@@ -193,6 +205,10 @@ func fetchRecentMessages(session *discordgo.Session, current *discordgo.MessageC
 		if _, isCommand := parseKuroTextCommand(message.Content, triggerPrefix); isCommand {
 			continue
 		}
+		repliedMessage := message.ReferencedMessage
+		if repliedMessage == nil && message.MessageReference != nil {
+			repliedMessage = messagesByID[message.MessageReference.MessageID]
+		}
 		result = append(result, servicekuro.RecentMessage{
 			ID:     message.ID,
 			UserID: message.Author.ID,
@@ -206,7 +222,44 @@ func fetchRecentMessages(session *discordgo.Session, current *discordgo.MessageC
 			Assistant: assistant,
 			CreatedAt: message.Timestamp,
 			Images:    collectKuroImageAttachments(message),
+			ReplyTo: buildKuroReplyReference(
+				repliedMessage,
+				message.MessageReference,
+				botID,
+			),
 		})
+	}
+	return result
+}
+
+func buildKuroReplyReference(
+	message *discordgo.Message,
+	reference *discordgo.MessageReference,
+	botID string,
+) *servicekuro.ReplyReference {
+	if message == nil {
+		if reference == nil || strings.TrimSpace(reference.MessageID) == "" {
+			return nil
+		}
+		return &servicekuro.ReplyReference{
+			MessageID:   strings.TrimSpace(reference.MessageID),
+			Unavailable: true,
+		}
+	}
+
+	result := &servicekuro.ReplyReference{
+		MessageID:  strings.TrimSpace(message.ID),
+		Content:    cleanKuroContextText(message.Content, 300),
+		ImageCount: len(collectKuroImageAttachments(message)),
+	}
+	if message.Author != nil {
+		result.UserID = strings.TrimSpace(message.Author.ID)
+		result.Assistant = result.UserID != "" && result.UserID == botID
+		if result.Assistant {
+			result.DisplayName = "Kuro"
+		} else {
+			result.DisplayName = cleanKuroContextText(messageDisplayName(message), 64)
+		}
 	}
 	return result
 }
