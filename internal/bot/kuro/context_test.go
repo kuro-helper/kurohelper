@@ -8,14 +8,14 @@ import (
 	servicekuro "kurohelperservice/airuntime"
 )
 
-func TestBuildKuroRecentContextKeepsSpeakersAndBoundary(t *testing.T) {
+func TestBuildKuroRetrievalTextKeepsSpeakersAndBoundary(t *testing.T) {
 	now := time.Now()
-	prompt, retrieval := buildKuroRecentContext([]servicekuro.RecentMessage{
+	retrieval := buildKuroRetrievalText([]servicekuro.RecentMessage{
 		{ID: "100", DisplayName: "舊使用者", Content: "不應出現", CreatedAt: now},
 		{ID: "102", DisplayName: "肉圓", Content: "早安", CreatedAt: now.Add(time.Second)},
 		{ID: "103", DisplayName: "Kuro", Content: "……早安。", Assistant: true, CreatedAt: now.Add(2 * time.Second)},
 	}, kuroContextOptions{BoundaryID: "101", MessageLimit: 15, MaxChars: 6000})
-	if strings.Contains(prompt, "不應出現") {
+	if strings.Contains(retrieval, "不應出現") {
 		t.Fatal("context included a message before the new-chat boundary")
 	}
 	if !strings.Contains(retrieval, "[肉圓] 早安") || !strings.Contains(retrieval, "[Kuro] ……早安。") {
@@ -42,7 +42,7 @@ func TestKuroRecentContextIncludesImageOnlyMessages(t *testing.T) {
 		{ID: "103", DisplayName: "Bob", Images: []servicekuro.ImageAttachment{{ID: "image-2", URL: "https://cdn.discordapp.com/b.png"}}, CreatedAt: now.Add(2 * time.Second)},
 	}
 	options := kuroContextOptions{BoundaryID: "101", MessageLimit: 15, MaxChars: 6000}
-	_, retrieval := buildKuroRecentContext(messages, options)
+	retrieval := buildKuroRetrievalText(messages, options)
 	if !strings.Contains(retrieval, "[Alice] 看這張 [附有 1 張圖片；Discord 訊息 ID=102]") || !strings.Contains(retrieval, "[Bob] [附有 1 張圖片；Discord 訊息 ID=103]") {
 		t.Fatalf("missing image context: %s", retrieval)
 	}
@@ -79,7 +79,7 @@ func TestKuroRecentContextPreservesDiscordReplyRelationship(t *testing.T) {
 		},
 	}
 
-	_, retrieval := buildKuroRecentContext(
+	retrieval := buildKuroRetrievalText(
 		messages,
 		kuroContextOptions{MessageLimit: 15, MaxChars: 6000},
 	)
@@ -96,7 +96,7 @@ func TestKuroRecentContextPreservesDiscordReplyRelationship(t *testing.T) {
 }
 
 func TestKuroRecentContextMarksUnavailableReply(t *testing.T) {
-	_, retrieval := buildKuroRecentContext(
+	retrieval := buildKuroRetrievalText(
 		[]servicekuro.RecentMessage{{
 			ID:          "103",
 			DisplayName: "肉圓",

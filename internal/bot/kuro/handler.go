@@ -96,7 +96,7 @@ func OnMessageCreate(session *discordgo.Session, event *discordgo.MessageCreate)
 		MaxChars:     settings.RecentContextChars,
 		BoundaryID:   boundaryID,
 	}
-	_, retrievalText := buildKuroRecentContext(recentMessages, contextOptions)
+	retrievalText := buildKuroRetrievalText(recentMessages, contextOptions)
 	selectedRecentMessages := selectKuroRecentMessages(recentMessages, contextOptions)
 	displayName := messageDisplayName(event.Message)
 	images := appendUniqueKuroImages(nil, annotateKuroImages(
