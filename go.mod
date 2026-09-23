@@ -9,6 +9,7 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/samber/slog-multi v1.7.1
 	github.com/siongui/gojianfan v0.0.0-20210926212422-2f175ac615de
+	golang.org/x/crypto v0.57.0
 	gorm.io/gorm v1.31.1
 	kurohelperservice v0.0.0
 )
@@ -25,10 +26,9 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/slog-common v0.20.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
 )
