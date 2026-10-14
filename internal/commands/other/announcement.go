@@ -7,22 +7,22 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"kurohelper/internal/cache"
 	"kurohelper/internal/commands"
 	kurohelpererrors "kurohelper/internal/errors"
+	"kurohelper/internal/executor"
 	"kurohelper/internal/utils"
 	kurohelperdb "kurohelperservice/db"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 const (
-	announcementCommandName = "公告"
-	announcementListRoute   = "l"
-	announcementDetailRoute = "d"
-	// 不使用快取；CID 仍需佔位
-	announcementNoCacheID = "-"
-	announcementMaxMenu   = 5
+	announcementCommandName  = "公告"
+	announcementListRoute    = "list"
+	announcementItemsPerPage = 5
 )
 
 var announcementColor = 0xF19483
@@ -42,64 +42,58 @@ func (a *Announcement) Handler(s *discordgo.Session, i *discordgo.InteractionCre
 
 func (a *Announcement) HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
 	if cid == nil {
-		respondAnnouncementList(s, i, false)
+		respondAnnouncementList(s, i)
 		return
 	}
 
-	switch {
-	case cid.GetRouteKey() == announcementDetailRoute && cid.GetBehaviorID() == utils.SelectMenuBehavior:
+	switch cid.GetBehaviorID() {
+	case utils.PageBehavior:
+		pageCID, err := cid.ToPageCIDV2()
+		if err != nil {
+			utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
+			return
+		}
+		executor.ChangePage(s, i, pageCID, cache.AnnouncementListStore, buildAnnouncementListComponents)
+	case utils.SelectMenuBehavior:
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
 		})
 		respondAnnouncementDetail(s, i, cid)
-	case cid.GetRouteKey() == announcementListRoute && cid.GetBehaviorID() == utils.BackToHomeBehavior:
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
-		respondAnnouncementList(s, i, true)
+	case utils.BackToHomeBehavior:
+		executor.BackToHome(s, i, cid.ToBackToHomeCIDV2(), cache.AnnouncementListStore, buildAnnouncementListComponents)
 	default:
 		utils.HandleErrorV2(kurohelpererrors.ErrCIDBehaviorMismatch, s, i, utils.InteractionRespondEditComplex)
 	}
 }
 
-func respondAnnouncementList(s *discordgo.Session, i *discordgo.InteractionCreate, editExisting bool) {
-	if !editExisting {
-		if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		}); err != nil {
-			return
-		}
+func respondAnnouncementList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	}); err != nil {
+		return
 	}
 
 	list, err := kurohelperdb.GetAllAnnouncements(kurohelperdb.Dbs)
 	if err != nil {
-		respondErr := utils.WebhookEditRespond
-		if editExisting {
-			respondErr = utils.InteractionRespondEditComplex
-		}
-		utils.HandleErrorV2(err, s, i, respondErr)
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
 		return
 	}
 
-	components, err := buildAnnouncementListComponents(list)
+	cacheID := uuid.New().String()
+	cache.AnnouncementListStore.Set(cacheID, list)
+	cache.CIDV2Store.Set(cacheID, cacheID)
+
+	components, err := buildAnnouncementListComponents(list, 1, cacheID)
 	if err != nil {
-		respondErr := utils.WebhookEditRespond
-		if editExisting {
-			respondErr = utils.InteractionRespondEditComplex
-		}
-		utils.HandleErrorV2(err, s, i, respondErr)
-		return
-	}
-
-	if editExisting {
-		utils.InteractionRespondEditComplex(s, i, components)
+		utils.HandleErrorV2(err, s, i, utils.WebhookEditRespond)
 		return
 	}
 	utils.WebhookEditRespond(s, i, components)
 }
 
 func respondAnnouncementDetail(s *discordgo.Session, i *discordgo.InteractionCreate, cid *utils.CIDV2) {
-	id, err := strconv.Atoi(cid.ToSelectMenuCIDV2().Value)
+	selectMenuCID := cid.ToSelectMenuCIDV2()
+	id, err := strconv.Atoi(selectMenuCID.Value)
 	if err != nil || id <= 0 {
 		utils.HandleErrorV2(fmt.Errorf("announcement: invalid id"), s, i, utils.InteractionRespondEditComplex)
 		return
@@ -113,7 +107,7 @@ func respondAnnouncementDetail(s *discordgo.Session, i *discordgo.InteractionCre
 		},
 	})
 
-	item, err := kurohelperdb.GetAnnouncementByID(kurohelperdb.Dbs, id)
+	item, err := announcementFromListCache(selectMenuCID.CacheID, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.InteractionRespondEditComplex(s, i, utils.MakeErrorComponentV2("找不到該公告（可能已被刪除）"))
@@ -123,7 +117,7 @@ func respondAnnouncementDetail(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 
-	components, err := buildAnnouncementDetailComponents(item)
+	components, err := buildAnnouncementDetailComponents(item, selectMenuCID.CacheID)
 	if err != nil {
 		utils.HandleErrorV2(err, s, i, utils.InteractionRespondEditComplex)
 		return
@@ -131,7 +125,23 @@ func respondAnnouncementDetail(s *discordgo.Session, i *discordgo.InteractionCre
 	utils.InteractionRespondEditComplex(s, i, components)
 }
 
-func buildAnnouncementListComponents(list []kurohelperdb.Announcement) ([]discordgo.MessageComponent, error) {
+func announcementFromListCache(cacheID string, id int) (kurohelperdb.Announcement, error) {
+	listCacheKey, err := cache.CIDV2Store.Get(cacheID)
+	if err == nil {
+		list, listErr := cache.AnnouncementListStore.Get(listCacheKey)
+		if listErr == nil {
+			for _, item := range list {
+				if item.ID == id {
+					return item, nil
+				}
+			}
+		}
+	}
+
+	return kurohelperdb.GetAnnouncementByID(kurohelperdb.Dbs, id)
+}
+
+func buildAnnouncementListComponents(list []kurohelperdb.Announcement, currentPage int, cacheID string) ([]discordgo.MessageComponent, error) {
 	if len(list) == 0 {
 		return []discordgo.MessageComponent{
 			discordgo.Container{
@@ -143,26 +153,29 @@ func buildAnnouncementListComponents(list []kurohelperdb.Announcement) ([]discor
 		}, nil
 	}
 
-	shown := list
-	if len(shown) > announcementMaxMenu {
-		shown = shown[:announcementMaxMenu]
+	totalItems := len(list)
+	totalPages := (totalItems + announcementItemsPerPage - 1) / announcementItemsPerPage
+	if currentPage < 1 {
+		currentPage = 1
+	}
+	if currentPage > totalPages {
+		currentPage = totalPages
 	}
 
-	header := fmt.Sprintf("# 公告列表\n共 **%d** 則", len(list))
-	if len(list) > announcementMaxMenu {
-		header += fmt.Sprintf("（選單最多顯示 %d 則）", announcementMaxMenu)
-	}
+	start := (currentPage - 1) * announcementItemsPerPage
+	end := min(start+announcementItemsPerPage, totalItems)
+	shown := list[start:end]
 
 	divider := true
 	containerComponents := []discordgo.MessageComponent{
-		discordgo.TextDisplay{Content: header},
+		discordgo.TextDisplay{Content: fmt.Sprintf("# 公告列表\n共 **%d** 則", totalItems)},
 		discordgo.Separator{Divider: &divider},
 	}
 
 	menuItems := make([]utils.SelectMenuItem, 0, len(shown))
 	for idx, item := range shown {
 		itemContent := fmt.Sprintf("**%d. [%s]** %s\n📅 %s",
-			idx+1,
+			start+idx+1,
 			item.Category,
 			item.Title,
 			item.CreatedAt.Local().Format("2006/01/02"),
@@ -187,15 +200,21 @@ func buildAnnouncementListComponents(list []kurohelperdb.Announcement) ([]discor
 		})
 	}
 
+	pageComponents, err := utils.MakeChangePageComponent(announcementCommandName, announcementListRoute, currentPage, totalPages, cacheID)
+	if err != nil {
+		return nil, err
+	}
+
 	containerComponents = append(containerComponents,
 		discordgo.Separator{Divider: &divider},
 		utils.MakeSelectMenuComponent(
 			menuItems,
 			announcementCommandName,
-			announcementDetailRoute,
-			announcementNoCacheID,
+			announcementListRoute,
+			cacheID,
 			"選擇公告查看詳細",
 		),
+		pageComponents,
 	)
 
 	return []discordgo.MessageComponent{
@@ -206,7 +225,7 @@ func buildAnnouncementListComponents(list []kurohelperdb.Announcement) ([]discor
 	}, nil
 }
 
-func buildAnnouncementDetailComponents(item kurohelperdb.Announcement) ([]discordgo.MessageComponent, error) {
+func buildAnnouncementDetailComponents(item kurohelperdb.Announcement, cacheID string) ([]discordgo.MessageComponent, error) {
 	content := strings.TrimSpace(item.Content)
 	if utf8.RuneCountInString(content) > 3500 {
 		content = string([]rune(content)[:3500]) + "…"
@@ -250,7 +269,7 @@ func buildAnnouncementDetailComponents(item kurohelperdb.Announcement) ([]discor
 
 	containerComponents = append(containerComponents,
 		discordgo.Separator{Divider: &divider},
-		utils.MakeBackToHomeComponent(announcementCommandName, announcementListRoute, announcementNoCacheID),
+		utils.MakeBackToHomeComponent(announcementCommandName, announcementListRoute, cacheID),
 	)
 
 	return []discordgo.MessageComponent{

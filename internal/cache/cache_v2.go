@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"kurohelperservice"
+	"kurohelperservice/db"
 	"kurohelperservice/provider/bangumi"
 	"kurohelperservice/provider/erogs"
 	"kurohelperservice/provider/vndb"
@@ -66,6 +67,12 @@ var (
 
 // 使用者相關快取(混合資料型態)
 var UserInfoCache = NewCacheStoreV2[any](10 * time.Minute)
+
+// 公告列表快取
+//
+// 公告沒有搜尋關鍵字，每次開啟指令用 CID 的 UUID 當鍵，存該次列表快照。
+// CIDV2Store 再把同一個 UUID 對到這個鍵，翻頁與回到主頁才能沿用 executor。
+var AnnouncementListStore = NewCacheStoreV2[[]db.Announcement](cacheLostTime)
 
 // 月幕快取
 // var (
