@@ -378,6 +378,15 @@ func erogsSearchGameWithSelectMenuCIDV2(s *discordgo.Session, i *discordgo.Inter
 				imageURL = ""
 			}
 		}
+	} else {
+		game, err := kurohelperdb.GetGameByErogsID(kurohelperdb.Dbs, res.ID)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				slog.Warn("讀取遊戲備援封面失敗", "erogsID", res.ID, "err", err)
+			}
+		} else {
+			imageURL = strings.TrimSpace(game.ImageURL)
+		}
 	}
 
 	// 構建 Components V2 格式
